@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-
-	"github.com/content-services/utilities/Time"
 )
 
 type Primary struct {
@@ -42,18 +40,17 @@ type Location struct {
 }
 
 // Returns an array of package metadata information when given an Rpm Repo.
-// Accepts a RPM repo Url and a debug value (remember to set to false for production).
-func Extract(url string, debug bool) (Primary, error) {
+func Extract(url string) (Primary, error) {
 	primaryPath, err := getDataFromRepomd(url)
 	if err != nil {
 		return Primary{}, fmt.Errorf("GET error: %v", err)
 	}
 	var primaryUrl string = fmt.Sprintf("%s/%s", url, primaryPath)
 
-	return getDataFromPrimary(primaryUrl, debug)
+	return getDataFromPrimary(primaryUrl)
 }
 
-func getDataFromPrimary(url string, debug bool) (Primary, error) {
+func getDataFromPrimary(url string) (Primary, error) {
 	resp, err := http.Get(url)
 
 	if err != nil {
@@ -69,16 +66,9 @@ func getDataFromPrimary(url string, debug bool) (Primary, error) {
 		fmt.Println(err)
 	}
 
-	if debug {
-		defer Time.Elapsed("Parsing xml")()
-	}
-
 	var result Primary
 	xml.NewDecoder(reader).Decode(&result)
 
-	if debug {
-		fmt.Printf("Total Packages Parsed: %v\n", len(result.Packages))
-	}
 	reader.Close()
 	return result, nil
 }
