@@ -4,14 +4,11 @@ import (
 	"compress/gzip"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 )
-
-type Primary struct {
-	XMLName  xml.Name  `xml:"metadata"`
-	Packages []Package `xml:"package"`
-}
 
 type Package struct {
 	Type    string  `xml:"type,attr"`
@@ -40,40 +37,17 @@ type Location struct {
 }
 
 // Returns an array of package metadata information when given an Rpm Repo.
-func Extract(url string) (Primary, error) {
-	primaryPath, err := getDataFromRepomd(url)
-	if err != nil {
-		return Primary{}, fmt.Errorf("GET error: %v", err)
-	}
-	var primaryUrl string = fmt.Sprintf("%s/%s", url, primaryPath)
+func Extract(url string) ([]Package, error) {
+	primaryUrl, err := GetPrimaryUrlFromRepomdUrl(url)
 
-	return getDataFromPrimary(primaryUrl)
+	if err != nil {
+		return []Package{}, fmt.Errorf("GET error: %v", err)
+	}
+
+	return GetXmlDataFromPrimaryUrl(primaryUrl)
 }
 
-func getDataFromPrimary(url string) (Primary, error) {
-	resp, err := http.Get(url)
-
-	if err != nil {
-		return Primary{}, fmt.Errorf("GET error: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return Primary{}, fmt.Errorf("status error: %v", resp.StatusCode)
-	}
-
-	reader, err := gzip.NewReader(resp.Body)
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	var result Primary
-	xml.NewDecoder(reader).Decode(&result)
-
-	reader.Close()
-	return result, nil
-}
-
-func getDataFromRepomd(url string) (string, error) {
+func GetPrimaryUrlFromRepomdUrl(url string) (string, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/repodata/repomd.xml", url))
 	if err != nil {
 		return "", fmt.Errorf("GET error: %v", err)
@@ -98,8 +72,71 @@ func getDataFromRepomd(url string) (string, error) {
 			primaryLocation = data.Location.Href
 		}
 	}
+
 	if primaryLocation == "" {
 		return "", fmt.Errorf("GET error: Unable to parse 'primary' location in repomd.xml")
 	}
-	return primaryLocation, nil
+
+	return fmt.Sprintf("%s/%s", url, primaryLocation), nil
+}
+
+func GetXmlDataFromPrimaryUrl(url string) ([]Package, error) {
+	resp, err := http.Get(url)
+
+	if err != nil {
+		return []Package{}, fmt.Errorf("GET error: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return []Package{}, fmt.Errorf("status error: %v", resp.StatusCode)
+	}
+
+	return ParseXMLData(resp.Body)
+}
+
+func ParseXMLData(body io.ReadCloser) ([]Package, error) {
+	reader, err := gzip.NewReader(body)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	decoder := xml.NewDecoder(reader)
+	reader.Close()
+
+	result := []Package{}
+	for {
+		// Read tokens from the XML document in a stream.
+		t, err := decoder.Token()
+
+		// If we are at the end of the file, we are done
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			log.Fatalf("Error decoding token: %s", err)
+		} else if t == nil {
+			break
+		}
+
+		// Here, we inspect the token
+		switch elType := t.(type) {
+		case xml.StartElement:
+			switch elType.Name.Local {
+			// Found an item, so we process it
+			case "package":
+				var pkg Package
+
+				if err = decoder.DecodeElement(&pkg, &elType); err != nil {
+					log.Fatalf("Error decoding pkg: %s", err)
+				}
+				// Ensure that the type is "rpm" before pushing our array
+				if pkg.Type != "rpm" {
+					fmt.Printf("package found of tpye %v\n", pkg.Type)
+					break
+				}
+				result = append(result, pkg)
+			}
+		}
+	}
+
+	return result, err
 }
