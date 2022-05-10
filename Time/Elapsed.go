@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Converts bytes to Mega-bytes
 func bToMb(b uint64) uint64 {
 	return b / 1024 / 1024
 }
@@ -27,6 +28,6 @@ func ElapsedWithMemory(what string) func() {
 	return func() {
 		runtime.ReadMemStats(&m)
 		fmt.Printf("%s took %v\n", what, time.Since(start))
-		fmt.Printf("TotalMemoryAllocated = %v MB\n", bToMb(m.TotalAlloc))
+		fmt.Printf("MemoryAllocated = %v MB\n", bToMb(m.Alloc))
 	}
 }
