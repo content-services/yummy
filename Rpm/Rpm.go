@@ -36,31 +36,31 @@ type Location struct {
 	Href string `xml:"href,attr"`
 }
 
-// Returns an array of package metadata information when given an Rpm Repo.
-func Extract(url string) ([]Package, error) {
-	primaryUrl, err := GetPrimaryUrlFromRepomdUrl(url)
+// Returns an array of package information when given an Rpm Repo.
+func ExtractPackageData(url string) ([]Package, error) {
+	primaryURL, err := GetPrimaryURLFromRepoURL(url)
 
 	if err != nil {
-		return []Package{}, fmt.Errorf("GET error: %v", err)
+		return []Package{}, err
 	}
 
-	return GetXmlDataFromPrimaryUrl(primaryUrl)
+	return GetPackagesArrayWithPrimaryURL(primaryURL)
 }
 
-func GetPrimaryUrlFromRepomdUrl(url string) (string, error) {
+func GetPrimaryURLFromRepoURL(url string) (string, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/repodata/repomd.xml", url))
 	if err != nil {
-		return "", fmt.Errorf("GET error: %v", err)
+		return "", fmt.Errorf("GET error: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("status error: %v", resp.StatusCode)
+		return "", fmt.Errorf("Status error: %v", resp.StatusCode)
 	}
 
-	byteValue, err := ioutil.ReadAll(resp.Body)
+	byteValue, erro := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
-	if err != nil {
-		return "", fmt.Errorf("read body: %v", err)
+	if erro != nil {
+		return "", fmt.Errorf("io.reader read failure: %w", err)
 	}
 
 	var result Repomd
@@ -80,39 +80,43 @@ func GetPrimaryUrlFromRepomdUrl(url string) (string, error) {
 	return fmt.Sprintf("%s/%s", url, primaryLocation), nil
 }
 
-func GetXmlDataFromPrimaryUrl(url string) ([]Package, error) {
+// Returns an array of package information when given the primary repo URL.
+func GetPackagesArrayWithPrimaryURL(url string) ([]Package, error) {
 	resp, err := http.Get(url)
 
 	if err != nil {
-		return []Package{}, fmt.Errorf("GET error: %v", err)
+		return []Package{}, fmt.Errorf("GET error: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return []Package{}, fmt.Errorf("status error: %v", resp.StatusCode)
 	}
 
-	return ParseXMLData(resp.Body)
+	return ParseCompressedXMLData(resp.Body)
 }
 
-func ParseXMLData(body io.ReadCloser) ([]Package, error) {
+// Unzips a gzipped body response, then parses the contained XML for package information
+// Returns an array of package data
+func ParseCompressedXMLData(body io.ReadCloser) ([]Package, error) {
 	reader, err := gzip.NewReader(body)
 
 	if err != nil {
-		fmt.Println(err)
+		return []Package{}, fmt.Errorf("Error unzipping response body: %w", err)
 	}
 
 	decoder := xml.NewDecoder(reader)
 	reader.Close()
 
 	result := []Package{}
+
 	for {
 		// Read tokens from the XML document in a stream.
-		t, err := decoder.Token()
+		t, decodeError := decoder.Token()
 
 		// If we are at the end of the file, we are done
-		if err == io.EOF {
+		if decodeError == io.EOF {
 			break
-		} else if err != nil {
-			log.Fatalf("Error decoding token: %s", err)
+		} else if decodeError != nil {
+			return []Package{}, fmt.Errorf("Error decoding token: %w", decodeError)
 		} else if t == nil {
 			break
 		}
@@ -124,9 +128,9 @@ func ParseXMLData(body io.ReadCloser) ([]Package, error) {
 			// Found an item, so we process it
 			case "package":
 				var pkg Package
-
-				if err = decoder.DecodeElement(&pkg, &elType); err != nil {
-					log.Fatalf("Error decoding pkg: %s", err)
+				if decodeElementError := decoder.DecodeElement(&pkg, &elType); decodeElementError != nil {
+					log.Fatalf("Error decoding pkg: %s", decodeElementError)
+					break
 				}
 				// Ensure that the type is "rpm" before pushing our array
 				if pkg.Type != "rpm" {
@@ -138,5 +142,5 @@ func ParseXMLData(body io.ReadCloser) ([]Package, error) {
 		}
 	}
 
-	return result, err
+	return result, nil
 }

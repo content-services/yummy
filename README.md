@@ -1,6 +1,10 @@
 To use this package simply: 
 
 ```
+ go get https://github.com/content-services/utilities
+```
+
+```
 import (
 	"github.com/content-services/utilities/Rpm"
 	"github.com/content-services/utilities/Time"
