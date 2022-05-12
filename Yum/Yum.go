@@ -1,4 +1,4 @@
-package Rpm
+package Yum
 
 import (
 	"compress/gzip"
@@ -134,7 +134,7 @@ func ParseCompressedXMLData(body io.ReadCloser) ([]Package, error) {
 				}
 				// Ensure that the type is "rpm" before pushing our array
 				if pkg.Type != "rpm" {
-					fmt.Printf("package found of tpye %v\n", pkg.Type)
+					fmt.Printf("package found of type %v\n", pkg.Type)
 					break
 				}
 				result = append(result, pkg)
