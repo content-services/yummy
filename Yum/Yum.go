@@ -38,7 +38,15 @@ type Location struct {
 
 // Returns an array of package information when given an Rpm Repo.
 func ExtractPackageData(url string) ([]Package, error) {
-	primaryURL, err := GetPrimaryURLFromRepoURL(url)
+	resp, err := http.Get(fmt.Sprintf("%s/repodata/repomd.xml", url))
+	if err != nil {
+		return []Package{}, fmt.Errorf("GET error: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return []Package{}, fmt.Errorf("Status error: %v", resp.StatusCode)
+	}
+	primaryURL, err := GetPrimaryURLFromRepomdXML(resp.Body, url)
 
 	if err != nil {
 		return []Package{}, err
@@ -47,19 +55,10 @@ func ExtractPackageData(url string) ([]Package, error) {
 	return GetPackagesArrayWithPrimaryURL(primaryURL)
 }
 
-func GetPrimaryURLFromRepoURL(url string) (string, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/repodata/repomd.xml", url))
+func GetPrimaryURLFromRepomdXML(body io.ReadCloser, url string) (string, error) {
+	byteValue, err := ioutil.ReadAll(body)
+	body.Close()
 	if err != nil {
-		return "", fmt.Errorf("GET error: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Status error: %v", resp.StatusCode)
-	}
-
-	byteValue, erro := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if erro != nil {
 		return "", fmt.Errorf("io.reader read failure: %w", err)
 	}
 
