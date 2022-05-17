@@ -48,6 +48,8 @@ func ExtractPackageData(url string) ([]Package, error) {
 	}
 	primaryURL, err := GetPrimaryURLFromRepomdXML(resp.Body, url)
 
+	resp.Body.Close()
+
 	if err != nil {
 		return []Package{}, err
 	}
@@ -57,13 +59,15 @@ func ExtractPackageData(url string) ([]Package, error) {
 
 func GetPrimaryURLFromRepomdXML(body io.ReadCloser, url string) (string, error) {
 	byteValue, err := ioutil.ReadAll(body)
-	body.Close()
 	if err != nil {
 		return "", fmt.Errorf("io.reader read failure: %w", err)
 	}
 
 	var result Repomd
-	xml.Unmarshal(byteValue, &result)
+	err2 := xml.Unmarshal(byteValue, &result)
+	if err2 != nil {
+		return "", fmt.Errorf("xml.Unmarshal failure: %w", err)
+	}
 
 	var primaryLocation string
 	for _, data := range result.Data {
@@ -90,7 +94,11 @@ func GetPackagesArrayWithPrimaryURL(url string) ([]Package, error) {
 		return []Package{}, fmt.Errorf("status error: %v", resp.StatusCode)
 	}
 
-	return ParseCompressedXMLData(resp.Body)
+	packages, erro := ParseCompressedXMLData(resp.Body)
+
+	resp.Body.Close()
+
+	return packages, erro
 }
 
 // Unzips a gzipped body response, then parses the contained XML for package information
