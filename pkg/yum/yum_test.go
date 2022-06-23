@@ -1,4 +1,4 @@
-package Yum
+package yum
 
 import (
 	"fmt"
