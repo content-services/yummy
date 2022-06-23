@@ -1,3 +1,3 @@
-module github.com/content-services/utilities
+module github.com/content-services/yummy
 
 go 1.16
