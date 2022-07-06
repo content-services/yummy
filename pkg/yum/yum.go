@@ -11,16 +11,23 @@ import (
 )
 
 type Package struct {
-	Type    string  `xml:"type,attr"`
-	Name    string  `xml:"name"`
-	Arch    string  `xml:"arch"`
-	Version Version `xml:"version"`
+	Type     string   `xml:"type,attr"`
+	Name     string   `xml:"name"`
+	Arch     string   `xml:"arch"`
+	Version  Version  `xml:"version"`
+	Checksum Checksum `xml:"checksum"`
+	Summary  string   `xml:"summary"`
 }
 
 type Version struct {
 	Version string `xml:"ver,attr"`
 	Release string `xml:"rel,attr"`
-	Epoch   string `xml:"epoch,attr"`
+	Epoch   int32  `xml:"epoch,attr"`
+}
+
+type Checksum struct {
+	Value string `xml:",chardata"`
+	Type  string `xml:"type,attr"`
 }
 
 type Repomd struct {
@@ -37,8 +44,8 @@ type Location struct {
 }
 
 // Returns an array of package information when given an Rpm Repo.
-func ExtractPackageData(url string) ([]Package, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/repodata/repomd.xml", url))
+func ExtractPackageData(client http.Client, url string) ([]Package, error) {
+	resp, err := client.Get(fmt.Sprintf("%s/repodata/repomd.xml", url))
 	if err != nil {
 		return []Package{}, fmt.Errorf("GET error: %w", err)
 	}
@@ -54,7 +61,7 @@ func ExtractPackageData(url string) ([]Package, error) {
 		return []Package{}, err
 	}
 
-	return GetPackagesArrayWithPrimaryURL(primaryURL)
+	return GetPackagesArrayWithPrimaryURL(client, primaryURL)
 }
 
 func GetPrimaryURLFromRepomdXML(body io.ReadCloser, url string) (string, error) {
@@ -84,8 +91,8 @@ func GetPrimaryURLFromRepomdXML(body io.ReadCloser, url string) (string, error) 
 }
 
 // Returns an array of package information when given the primary repo URL.
-func GetPackagesArrayWithPrimaryURL(url string) ([]Package, error) {
-	resp, err := http.Get(url)
+func GetPackagesArrayWithPrimaryURL(client http.Client, url string) ([]Package, error) {
+	resp, err := client.Get(url)
 
 	if err != nil {
 		return []Package{}, fmt.Errorf("GET error: %w", err)
