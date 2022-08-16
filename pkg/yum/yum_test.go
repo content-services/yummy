@@ -33,18 +33,29 @@ func TestParseCompressedXMLData(t *testing.T) {
 }
 
 func TestGetPrimaryURLFromRepomdXML(t *testing.T) {
-	var url string = "gator/stickhat"
+	url := "gator/stickhat"
 	xmlFile, err := os.Open("mocks/yum_test_repomd.xml")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer xmlFile.Close()
-	result, err := GetPrimaryURLFromRepomdXML(xmlFile, url)
+
+	repomd, err := parseRepomdXML(xmlFile)
 	if err != nil {
 		t.Errorf("Error in test: %v", err)
 	}
-	expect := fmt.Sprintf("%s/repodata/primary.xml.gz", url)
-	if result != expect {
-		t.Errorf("Error -  Expected: %v, received: %v", expect, result)
+
+	foundURL, err := GetPrimaryURL(repomd, url)
+	if err != nil {
+		t.Errorf("Error in test: %v", err)
+	}
+
+	expectedURL := fmt.Sprintf("%s/repodata/primary.xml.gz", url)
+	expectedRevision := "1308257578"
+	if foundURL != expectedURL {
+		t.Errorf("Error -  Expected: %v, received: %v", expectedURL, foundURL)
+	}
+	if repomd.Revision != expectedRevision {
+		t.Errorf("Error - Expected: %v, received: %v", expectedRevision, repomd.Revision)
 	}
 }
