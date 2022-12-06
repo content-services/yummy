@@ -47,6 +47,31 @@ func TestConfigure(t *testing.T) {
 	assert.NotEqual(t, firstClient.Timeout, r.settings.Client.Timeout)
 }
 
+func TestClear(t *testing.T) {
+	s := server()
+	defer s.Close()
+
+	c := s.Client()
+	settings := YummySettings{
+		Client: c,
+		URL:    &s.URL,
+	}
+	r, _ := NewRepository(settings)
+
+	_, _, _ = r.Repomd()
+	_, _, _ = r.Packages()
+	_, _, _ = r.Signature()
+	assert.NotNil(t, r.repomd)
+	assert.NotNil(t, r.packages)
+	assert.NotNil(t, r.repomdSignature)
+
+	r.Clear()
+	assert.Nil(t, r.repomd)
+	assert.Nil(t, r.packages)
+	assert.Nil(t, r.repomdSignature)
+
+}
+
 func TestFetchRepomd(t *testing.T) {
 	s := server()
 	defer s.Close()

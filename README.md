@@ -26,13 +26,13 @@ settings := YummySettings{
 repo, err := NewRepository(settings)
 
 // To get repomd metadata
-repomd, statusCode, err := r.Repomd()
+repomd, statusCode, err := repo.Repomd()
 
 // To get package metadata
-packages, statusCode, err := r.Packages()
+packages, statusCode, err := repo.Packages()
 
 // To get repository signature
-signature, statusCode, err := r.Signature()
+signature, statusCode, err := repo.Signature()
 ```  
 
 **To parse packages from a yum repository on disk**

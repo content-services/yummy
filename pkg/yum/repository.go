@@ -59,6 +59,7 @@ type YumRepository interface {
 	Packages() (packages []Package, statusCode int, err error)
 	Repomd() (repomd *Repomd, statusCode int, err error)
 	Signature() (repomdSignature *string, statusCode int, err error)
+	Clear()
 }
 
 type Repository struct {
@@ -70,7 +71,7 @@ type Repository struct {
 
 func NewRepository(settings YummySettings) (Repository, error) {
 	if settings.Client == nil {
-		return Repository{}, fmt.Errorf("client cannot be nil")
+		settings.Client = http.DefaultClient
 	}
 	if settings.URL == nil {
 		return Repository{}, fmt.Errorf("url cannot be nil")
@@ -82,13 +83,24 @@ func (r *Repository) Configure(settings YummySettings) {
 	if settings.Client != nil {
 		r.settings.Client = settings.Client
 	}
+	if r.settings.Client == nil {
+		r.settings.Client = http.DefaultClient
+	}
 	if settings.URL != nil {
 		r.settings.URL = settings.URL
 	}
+	r.Clear()
+}
+
+// Clear resets cached data to nil
+func (r *Repository) Clear() {
+	r.repomd = nil
+	r.packages = nil
+	r.repomdSignature = nil
 }
 
 // Repomd populates r.Repomd with repository's repomd.xml metadata. Returns Repomd, response code, and error.
-// If the repomd was successfully fetched previously, will return repomd.
+// If the repomd was successfully fetched previously, will return cached repomd.
 func (r *Repository) Repomd() (*Repomd, int, error) {
 	var result Repomd
 	var err error
@@ -118,7 +130,7 @@ func (r *Repository) Repomd() (*Repomd, int, error) {
 }
 
 // Packages populates r.Packages with metadata of each package in repository. Returns response code and error.
-// If the packages were successfully fetched previously, will return packages.
+// If the packages were successfully fetched previously, will return cached packages.
 func (r *Repository) Packages() ([]Package, int, error) {
 	var err error
 	var primaryURL string
@@ -155,7 +167,7 @@ func (r *Repository) Packages() ([]Package, int, error) {
 }
 
 // Signature fetches the yum metadata signature and returns any error and HTTP code encountered.
-// If the signature was successfully fetched previously, will return signature.
+// If the signature was successfully fetched previously, will return cached signature.
 func (r *Repository) Signature() (*string, int, error) {
 	var sig *string
 
@@ -287,7 +299,6 @@ func ParseCompressedXMLData(body io.ReadCloser) ([]Package, error) {
 				}
 				// Ensure that the type is "rpm" before pushing our array
 				if pkg.Type != "rpm" {
-					fmt.Printf("package found of type %v\n", pkg.Type)
 					break
 				}
 				result = append(result, pkg)
