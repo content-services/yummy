@@ -136,6 +136,22 @@ func TestFetchPackages(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestBadUrl(t *testing.T) {
+	badUrl := "example.com/"
+	s := server()
+	defer s.Close()
+
+	c := s.Client()
+	settings := YummySettings{
+		Client: c,
+		URL:    &badUrl,
+	}
+	r, _ := NewRepository(settings)
+	_, code, err := r.Repomd()
+	assert.Error(t, err)
+	assert.Equal(t, code, 0)
+}
+
 func TestFetchRepomdSignature(t *testing.T) {
 	s := server()
 	defer s.Close()

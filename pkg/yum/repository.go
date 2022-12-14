@@ -114,7 +114,7 @@ func (r *Repository) Repomd() (*Repomd, int, error) {
 		return nil, 0, fmt.Errorf("error parsing Repomd URL: %w", err)
 	}
 	if resp, err = r.settings.Client.Get(repomdURL); err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("GET error: %w", err)
+		return nil, erroredStatusCode(resp), fmt.Errorf("GET error: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -127,6 +127,14 @@ func (r *Repository) Repomd() (*Repomd, int, error) {
 
 	r.repomd = &result
 	return r.repomd, resp.StatusCode, nil
+}
+
+func erroredStatusCode(response *http.Response) int {
+	if response == nil {
+		return 0
+	} else {
+		return response.StatusCode
+	}
 }
 
 // Packages populates r.Packages with metadata of each package in repository. Returns response code and error.
@@ -150,7 +158,7 @@ func (r *Repository) Packages() ([]Package, int, error) {
 	}
 
 	if resp, err = r.settings.Client.Get(primaryURL); err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("GET error: %w", err)
+		return nil, erroredStatusCode(resp), fmt.Errorf("GET error: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -181,7 +189,9 @@ func (r *Repository) Signature() (*string, int, error) {
 	}
 
 	resp, err := r.settings.Client.Get(sigUrl)
-	if err == nil && resp.StatusCode < 200 || resp.StatusCode > 299 {
+	if err != nil {
+		return nil, erroredStatusCode(resp), err
+	} else if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, resp.StatusCode, fmt.Errorf("received http %d", resp.StatusCode)
 	}
 
