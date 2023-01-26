@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -238,11 +237,16 @@ func (r *Repository) getPrimaryURL() (string, error) {
 	if primaryLocation == "" {
 		return "", fmt.Errorf("GET error: Unable to parse 'primary' location in repomd.xml")
 	}
-	return fmt.Sprintf("%s/%s", *r.settings.URL, primaryLocation), nil
+	url, err := url.Parse(*r.settings.URL)
+	if err != nil {
+		return "", err
+	}
+	url.Path = path.Join(url.Path, primaryLocation)
+	return url.String(), nil
 }
 
 func responseBodyToString(body io.ReadCloser) (*string, error) {
-	byteValue, err := ioutil.ReadAll(body)
+	byteValue, err := io.ReadAll(body)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +258,7 @@ func responseBodyToString(body io.ReadCloser) (*string, error) {
 func ParseRepomdXML(body io.ReadCloser) (Repomd, error) {
 	var result Repomd
 
-	byteValue, err := ioutil.ReadAll(body)
+	byteValue, err := io.ReadAll(body)
 	if err != nil {
 		return Repomd{}, fmt.Errorf("io.reader read failure: %w", err)
 	}
