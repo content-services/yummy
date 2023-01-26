@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openlyinc/pointy"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -70,6 +71,22 @@ func TestClear(t *testing.T) {
 	assert.Nil(t, r.packages)
 	assert.Nil(t, r.repomdSignature)
 
+}
+func TestGetPrimaryURL(t *testing.T) {
+	xmlFile, err := os.Open("mocks/repomd.xml")
+	assert.Nil(t, err)
+	settings := YummySettings{
+		URL: pointy.String("http://foo.example.com/repo/"),
+	}
+	r, err := NewRepository(settings)
+	assert.Nil(t, err)
+	repomd, err := ParseRepomdXML(xmlFile)
+	assert.Nil(t, err)
+	r.repomd = &repomd
+
+	primary, err := r.getPrimaryURL()
+	assert.Nil(t, err)
+	assert.Equal(t, "http://foo.example.com/repo/repodata/primary.xml.gz", primary)
 }
 
 func TestFetchRepomd(t *testing.T) {
