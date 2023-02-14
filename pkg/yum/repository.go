@@ -113,12 +113,12 @@ func (r *Repository) Repomd() (*Repomd, int, error) {
 		return nil, 0, fmt.Errorf("error parsing Repomd URL: %w", err)
 	}
 	if resp, err = r.settings.Client.Get(repomdURL); err != nil {
-		return nil, erroredStatusCode(resp), fmt.Errorf("GET error: %w", err)
+		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", repomdURL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, fmt.Errorf("Status error: %v", resp.StatusCode)
+		return nil, resp.StatusCode, fmt.Errorf("cannot fetch %v: %v", repomdURL, resp.StatusCode)
 	}
 	if result, err = ParseRepomdXML(resp.Body); err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("error parsing repomd.xml: %w", err)
@@ -157,12 +157,12 @@ func (r *Repository) Packages() ([]Package, int, error) {
 	}
 
 	if resp, err = r.settings.Client.Get(primaryURL); err != nil {
-		return nil, erroredStatusCode(resp), fmt.Errorf("GET error: %w", err)
+		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", primaryURL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, fmt.Errorf("status error: %d", resp.StatusCode)
+		return nil, resp.StatusCode, fmt.Errorf("cannot fetch %v: %d", primaryURL, resp.StatusCode)
 	}
 
 	if packages, err = ParseCompressedXMLData(resp.Body); err != nil {
