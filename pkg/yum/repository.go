@@ -110,18 +110,18 @@ func (r *Repository) Repomd() (*Repomd, int, error) {
 		return r.repomd, 0, nil
 	}
 	if repomdURL, err = r.getRepomdURL(); err != nil {
-		return nil, 0, fmt.Errorf("error parsing Repomd URL: %w", err)
+		return nil, 0, fmt.Errorf("Error parsing Repomd URL: %w", err)
 	}
 	if resp, err = r.settings.Client.Get(repomdURL); err != nil {
-		return nil, erroredStatusCode(resp), fmt.Errorf("GET error: %w", err)
+		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", repomdURL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, fmt.Errorf("Status error: %v", resp.StatusCode)
+		return nil, resp.StatusCode, fmt.Errorf("Cannot fetch %v: %v", repomdURL, resp.StatusCode)
 	}
 	if result, err = ParseRepomdXML(resp.Body); err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("error parsing repomd.xml: %w", err)
+		return nil, resp.StatusCode, fmt.Errorf("Error parsing repomd.xml: %w", err)
 	}
 
 	r.repomd = &result
@@ -153,16 +153,16 @@ func (r *Repository) Packages() ([]Package, int, error) {
 	}
 
 	if primaryURL, err = r.getPrimaryURL(); err != nil {
-		return nil, 0, fmt.Errorf("error getting primary URL: %w", err)
+		return nil, 0, fmt.Errorf("Error getting primary URL: %w", err)
 	}
 
 	if resp, err = r.settings.Client.Get(primaryURL); err != nil {
-		return nil, erroredStatusCode(resp), fmt.Errorf("GET error: %w", err)
+		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", primaryURL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, fmt.Errorf("status error: %d", resp.StatusCode)
+		return nil, resp.StatusCode, fmt.Errorf("Cannot fetch %v: %d", primaryURL, resp.StatusCode)
 	}
 
 	if packages, err = ParseCompressedXMLData(resp.Body); err != nil {
