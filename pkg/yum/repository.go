@@ -1,6 +1,7 @@
 package yum
 
 import (
+	"bytes"
 	"compress/gzip"
 	"encoding/xml"
 	"fmt"
@@ -9,6 +10,11 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+
+	"github.com/h2non/filetype"
+	"github.com/h2non/filetype/matchers"
+	"github.com/klauspost/compress/zstd"
+	"github.com/ulikunitz/xz"
 )
 
 // Package metadata of a given package
@@ -165,7 +171,7 @@ func (r *Repository) Packages() ([]Package, int, error) {
 		return nil, resp.StatusCode, fmt.Errorf("Cannot fetch %v: %d", primaryURL, resp.StatusCode)
 	}
 
-	if packages, err = ParseCompressedXMLData(resp.Body); err != nil {
+	if packages, err = ParseCompressedXMLData(io.NopCloser(resp.Body)); err != nil {
 		return nil, resp.StatusCode, err
 	}
 	r.packages = packages
@@ -273,17 +279,38 @@ func ParseRepomdXML(body io.ReadCloser) (Repomd, error) {
 	return result, err
 }
 
-// Unzips a gzipped body response, then parses the contained XML for package information
+// Unzips a compressed body response, then parses the contained XML for package information
 // Returns an array of package data
-func ParseCompressedXMLData(body io.ReadCloser) ([]Package, error) {
-	reader, err := gzip.NewReader(body)
+func ParseCompressedXMLData(body io.Reader) ([]Package, error) {
+	var reader, data io.Reader
+	var err error
 
+	data = body
+	readData, err := io.ReadAll(data)
+	if err != nil {
+		return []Package{}, err
+	}
+	fileType, err := filetype.Match(readData)
+	if err != nil {
+		return []Package{}, err
+	}
+
+	data = bytes.NewReader(readData)
+	switch fileType {
+	case matchers.TypeGz:
+		reader, err = gzip.NewReader(data)
+	case matchers.TypeZstd:
+		reader, err = zstd.NewReader(data)
+	case matchers.TypeXz:
+		reader, err = xz.NewReader(data)
+	default:
+		return []Package{}, fmt.Errorf("invalid file type: must be gzip, xz, or zstd.")
+	}
 	if err != nil {
 		return []Package{}, fmt.Errorf("Error unzipping response body: %w", err)
 	}
 
 	decoder := xml.NewDecoder(reader)
-	reader.Close()
 
 	result := []Package{}
 
