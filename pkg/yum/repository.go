@@ -1,12 +1,11 @@
 package yum
 
 import (
-	"bytes"
+	"bufio"
 	"compress/gzip"
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"path"
@@ -14,8 +13,12 @@ import (
 	"github.com/h2non/filetype"
 	"github.com/h2non/filetype/matchers"
 	"github.com/klauspost/compress/zstd"
+	"github.com/openlyinc/pointy"
 	"github.com/ulikunitz/xz"
 )
+
+// Max uncompressed XML file supported
+const DefaultMaxXmlSize = int64(512 * 1024 * 1024) // 512 MB
 
 // Package metadata of a given package
 type Package struct {
@@ -55,8 +58,9 @@ type Location struct {
 }
 
 type YummySettings struct {
-	Client *http.Client
-	URL    *string
+	Client     *http.Client
+	URL        *string
+	MaxXmlSize *int64
 }
 
 type YumRepository interface {
@@ -80,6 +84,9 @@ func NewRepository(settings YummySettings) (Repository, error) {
 	}
 	if settings.URL == nil {
 		return Repository{}, fmt.Errorf("url cannot be nil")
+	}
+	if settings.MaxXmlSize == nil {
+		settings.MaxXmlSize = pointy.Pointer(DefaultMaxXmlSize)
 	}
 	return Repository{settings: settings}, nil
 }
@@ -171,7 +178,7 @@ func (r *Repository) Packages() ([]Package, int, error) {
 		return nil, resp.StatusCode, fmt.Errorf("Cannot fetch %v: %d", primaryURL, resp.StatusCode)
 	}
 
-	if packages, err = ParseCompressedXMLData(io.NopCloser(resp.Body)); err != nil {
+	if packages, err = ParseCompressedXMLData(io.NopCloser(resp.Body), *r.settings.MaxXmlSize); err != nil {
 		return nil, resp.StatusCode, err
 	}
 	r.packages = packages
@@ -280,29 +287,38 @@ func ParseRepomdXML(body io.ReadCloser) (Repomd, error) {
 }
 
 // Unzips a compressed body response, then parses the contained XML for package information
+// This uses a BufferedReader to peek at the data to figure out what type of compression to use.
+// This also gets wrapped in a LimitedReader to prevent large files from causing an OOM
+//
 // Returns an array of package data
-func ParseCompressedXMLData(body io.Reader) ([]Package, error) {
-	var reader, data io.Reader
+func ParseCompressedXMLData(body io.Reader, maxSize int64) ([]Package, error) {
+	var reader io.Reader
 	var err error
+	result := []Package{}
 
-	data = body
-	readData, err := io.ReadAll(data)
+	bufferedReader := bufio.NewReader(body)
+
+	// peek at the first bytes to determine the type
+	header, err := bufferedReader.Peek(20)
+	if err != nil {
+		return result, err
+	}
+
 	if err != nil {
 		return []Package{}, err
 	}
-	fileType, err := filetype.Match(readData)
+	fileType, err := filetype.Match(header)
 	if err != nil {
 		return []Package{}, err
 	}
 
-	data = bytes.NewReader(readData)
 	switch fileType {
 	case matchers.TypeGz:
-		reader, err = gzip.NewReader(data)
+		reader, err = gzip.NewReader(bufferedReader)
 	case matchers.TypeZstd:
-		reader, err = zstd.NewReader(data)
+		reader, err = zstd.NewReader(bufferedReader)
 	case matchers.TypeXz:
-		reader, err = xz.NewReader(data)
+		reader, err = xz.NewReader(bufferedReader)
 	default:
 		return []Package{}, fmt.Errorf("invalid file type: must be gzip, xz, or zstd.")
 	}
@@ -310,9 +326,8 @@ func ParseCompressedXMLData(body io.Reader) ([]Package, error) {
 		return []Package{}, fmt.Errorf("Error unzipping response body: %w", err)
 	}
 
-	decoder := xml.NewDecoder(reader)
-
-	result := []Package{}
+	limitedReader := io.LimitReader(reader, maxSize)
+	decoder := xml.NewDecoder(limitedReader)
 
 	for {
 		// Read tokens from the XML document in a stream.
@@ -335,8 +350,7 @@ func ParseCompressedXMLData(body io.Reader) ([]Package, error) {
 			case "package":
 				var pkg Package
 				if decodeElementError := decoder.DecodeElement(&pkg, &elType); decodeElementError != nil {
-					log.Fatalf("Error decoding pkg: %s", decodeElementError)
-					break
+					return result, decodeElementError
 				}
 				// Ensure that the type is "rpm" before pushing our array
 				if pkg.Type != "rpm" {
