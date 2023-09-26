@@ -187,6 +187,26 @@ func TestFetchRepomdSignature(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+// if the xml is half complete, you get a parse error
+func TestParseCompressedXMLDataWithError(t *testing.T) {
+	xmlFile, err := os.Open("mocks/primary.xml.gz")
+	assert.NoError(t, err)
+	defer xmlFile.Close()
+	result, err := ParseCompressedXMLData(xmlFile, 200)
+	assert.Error(t, err)
+	assert.Empty(t, result)
+}
+
+// If no elements are parsed, no error is thrown, but you get empty results
+func TestParseCompressedXMLDataMaxLimit(t *testing.T) {
+	xmlFile, err := os.Open("mocks/aaaa.xml.gz")
+	assert.NoError(t, err)
+	defer xmlFile.Close()
+	result, err := ParseCompressedXMLData(xmlFile, 10)
+	assert.NoError(t, err)
+	assert.Empty(t, result)
+}
+
 // Check that the parser can decompress a compressed file and read the correct number of packages
 func TestParseCompressedXMLData(t *testing.T) {
 	paths := []string{
@@ -201,7 +221,7 @@ func TestParseCompressedXMLData(t *testing.T) {
 			log.Fatal(err)
 		}
 		defer xmlFile.Close()
-		result, err := ParseCompressedXMLData(xmlFile)
+		result, err := ParseCompressedXMLData(xmlFile, DefaultMaxXmlSize)
 		if err != nil {
 			t.Errorf("Error in test: %v", err)
 		}
