@@ -66,17 +66,25 @@ type YummySettings struct {
 }
 
 type PackageGroup struct {
-	ID          string   `xml:"id"`
-	Name        []string `xml:"name"`
-	Description []string `xml:"description"`
-	PackageList []string `xml:"packagelist>packagereq"`
+	ID          string                  `xml:"id"`
+	Name        PackageGroupName        `xml:"name"`
+	Description PackageGroupDescription `xml:"description"`
+	PackageList []string                `xml:"packagelist>packagereq"`
 }
 
+type PackageGroupName string
+
+type PackageGroupDescription string
+
 type Environment struct {
-	ID          string   `xml:"id"`
-	Name        []string `xml:"name"`
-	Description []string `xml:"description"`
+	ID          string                 `xml:"id"`
+	Name        EnvironmentName        `xml:"name"`
+	Description EnvironmentDescription `xml:"description"`
 }
+
+type EnvironmentName string
+
+type EnvironmentDescription string
 
 type YumRepository interface {
 	Configure(settings YummySettings)
@@ -436,58 +444,53 @@ func ParseCompsXML(body io.ReadCloser) ([]PackageGroup, []Environment, error) {
 			}
 		}
 	}
-	// remove names and descriptions with localized elements
-	enPackageGroups, processError := processItemsToRemoveLocalized(packageGroups)
-	if processError != nil {
-		return packageGroups, environments, processError
-	}
 
-	enEnvironments, processError := processItemsToRemoveLocalized(environments)
-	if processError != nil {
-		return packageGroups, environments, processError
-	}
-
-	return enPackageGroups.([]PackageGroup), enEnvironments.([]Environment), err
+	return packageGroups, environments, err
 }
 
-func processItemsToRemoveLocalized(items interface{}) (interface{}, error) {
-	switch v := items.(type) {
-	case []PackageGroup:
-		_, ok := items.([]PackageGroup)
-		if !ok {
-			return items, fmt.Errorf("error: type assertion failed")
-		}
-		var processedItems []PackageGroup
-		for _, item := range v {
-			processedItem := PackageGroup{
-				ID:          item.ID,
-				Name:        item.Name[:1],
-				Description: item.Description[:1],
-				PackageList: item.PackageList,
-			}
-			processedItems = append(processedItems, processedItem)
-		}
-		return processedItems, nil
-
-	case []Environment:
-		_, ok := items.([]Environment)
-		if !ok {
-			return items, fmt.Errorf("error: type assertion failed")
-		}
-		var processedItems []Environment
-		for _, item := range v {
-			processedItem := Environment{
-				ID:          item.ID,
-				Name:        item.Name[:1],
-				Description: item.Description[:1],
-			}
-			processedItems = append(processedItems, processedItem)
-		}
-		return processedItems, nil
-
-	default:
-		return items, nil
+// Custom unmarshal methods for localized elements
+func (pn *PackageGroupName) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var t string
+	if err := d.DecodeElement(&t, &start); err != nil {
+		return err
 	}
+	if len(start.Attr) == 0 {
+		*pn = PackageGroupName(t)
+	}
+	return nil
+}
+
+func (pd *PackageGroupDescription) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var t string
+	if err := d.DecodeElement(&t, &start); err != nil {
+		return err
+	}
+	if len(start.Attr) == 0 {
+		*pd = PackageGroupDescription(t)
+	}
+	return nil
+}
+
+func (en *EnvironmentName) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var t string
+	if err := d.DecodeElement(&t, &start); err != nil {
+		return err
+	}
+	if len(start.Attr) == 0 {
+		*en = EnvironmentName(t)
+	}
+	return nil
+}
+
+func (ed *EnvironmentDescription) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var t string
+	if err := d.DecodeElement(&t, &start); err != nil {
+		return err
+	}
+	if len(start.Attr) == 0 {
+		*ed = EnvironmentDescription(t)
+	}
+	return nil
 }
 
 // Unzips a compressed body response, then parses the contained XML for package information
