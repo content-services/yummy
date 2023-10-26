@@ -437,15 +437,26 @@ func ParseCompsXML(body io.ReadCloser) ([]PackageGroup, []Environment, error) {
 		}
 	}
 	// remove names and descriptions with localized elements
-	enPackageGroups := processItemsToRemoveLocalized(packageGroups).([]PackageGroup)
-	enEnvironments := processItemsToRemoveLocalized(environments).([]Environment)
+	enPackageGroups, processError := processItemsToRemoveLocalized(packageGroups)
+	if processError != nil {
+		return packageGroups, environments, processError
+	}
 
-	return enPackageGroups, enEnvironments, err
+	enEnvironments, processError := processItemsToRemoveLocalized(environments)
+	if processError != nil {
+		return packageGroups, environments, processError
+	}
+
+	return enPackageGroups.([]PackageGroup), enEnvironments.([]Environment), err
 }
 
-func processItemsToRemoveLocalized(items interface{}) interface{} {
+func processItemsToRemoveLocalized(items interface{}) (interface{}, error) {
 	switch v := items.(type) {
 	case []PackageGroup:
+		_, ok := items.([]PackageGroup)
+		if !ok {
+			return items, fmt.Errorf("error: type assertion failed")
+		}
 		var processedItems []PackageGroup
 		for _, item := range v {
 			processedItem := PackageGroup{
@@ -456,9 +467,13 @@ func processItemsToRemoveLocalized(items interface{}) interface{} {
 			}
 			processedItems = append(processedItems, processedItem)
 		}
-		return processedItems
+		return processedItems, nil
 
 	case []Environment:
+		_, ok := items.([]Environment)
+		if !ok {
+			return items, fmt.Errorf("error: type assertion failed")
+		}
 		var processedItems []Environment
 		for _, item := range v {
 			processedItem := Environment{
@@ -468,10 +483,10 @@ func processItemsToRemoveLocalized(items interface{}) interface{} {
 			}
 			processedItems = append(processedItems, processedItem)
 		}
-		return processedItems
+		return processedItems, nil
 
 	default:
-		return items
+		return items, nil
 	}
 }
 
