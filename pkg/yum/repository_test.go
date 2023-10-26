@@ -21,6 +21,9 @@ var repomdXML []byte
 //go:embed "mocks/primary.xml.gz"
 var primaryXML []byte
 
+//go:embed "mocks/comps.xml"
+var compsXML []byte
+
 //go:embed "mocks/repomd.xml.asc"
 var signatureXML []byte
 
@@ -61,14 +64,20 @@ func TestClear(t *testing.T) {
 
 	_, _, _ = r.Repomd()
 	_, _, _ = r.Packages()
+	_, _, _ = r.PackageGroups()
+	_, _, _ = r.Environments()
 	_, _, _ = r.Signature()
 	assert.NotNil(t, r.repomd)
 	assert.NotNil(t, r.packages)
+	assert.NotNil(t, r.packageGroups)
+	assert.NotNil(t, r.environments)
 	assert.NotNil(t, r.repomdSignature)
 
 	r.Clear()
 	assert.Nil(t, r.repomd)
 	assert.Nil(t, r.packages)
+	assert.Nil(t, r.packageGroups)
+	assert.Nil(t, r.environments)
 	assert.Nil(t, r.repomdSignature)
 
 }
@@ -120,6 +129,10 @@ func TestFetchRepomd(t *testing.T) {
 				Location: Location{Href: "repodata/primary.xml.gz"},
 			},
 			{
+				Type:     "group",
+				Location: Location{Href: "repodata/comps.xml"},
+			},
+			{
 				Type:     "updateinfo",
 				Location: Location{Href: "repodata/updateinfo.xml.gz"},
 			},
@@ -133,6 +146,24 @@ func TestFetchRepomd(t *testing.T) {
 	assert.Equal(t, *repomd, *r.repomd)
 	assert.Equal(t, 200, code)
 	assert.Nil(t, err)
+}
+
+func TestGetCompsURL(t *testing.T) {
+	xmlFile, err := os.Open("mocks/repomd.xml")
+	assert.Nil(t, err)
+	settings := YummySettings{
+		URL: pointy.String("http://foo.example.com/repo/"),
+	}
+	r, err := NewRepository(settings)
+
+	assert.Nil(t, err)
+	repomd, err := ParseRepomdXML(xmlFile)
+	assert.Nil(t, err)
+	r.repomd = &repomd
+
+	comps, err := r.getCompsURL()
+	assert.Nil(t, err)
+	assert.Equal(t, "http://foo.example.com/repo/repodata/comps.xml", comps)
 }
 
 func TestFetchPackages(t *testing.T) {
@@ -149,6 +180,42 @@ func TestFetchPackages(t *testing.T) {
 	packages, code, err := r.Packages()
 	assert.Equal(t, 2, len(packages))
 	assert.Equal(t, packages, r.packages)
+	assert.Equal(t, 200, code)
+	assert.Nil(t, err)
+}
+
+func TestFetchPackageGroups(t *testing.T) {
+	s := server()
+	defer s.Close()
+
+	c := s.Client()
+	settings := YummySettings{
+		Client: c,
+		URL:    &s.URL,
+	}
+	r, _ := NewRepository(settings)
+
+	packageGroups, code, err := r.PackageGroups()
+	assert.Equal(t, 1, len(packageGroups))
+	assert.Equal(t, packageGroups, r.packageGroups)
+	assert.Equal(t, 200, code)
+	assert.Nil(t, err)
+}
+
+func TestFetchEnvironments(t *testing.T) {
+	s := server()
+	defer s.Close()
+
+	c := s.Client()
+	settings := YummySettings{
+		Client: c,
+		URL:    &s.URL,
+	}
+	r, _ := NewRepository(settings)
+
+	environments, code, err := r.Environments()
+	assert.Equal(t, 1, len(environments))
+	assert.Equal(t, environments, r.environments)
 	assert.Equal(t, 200, code)
 	assert.Nil(t, err)
 }
@@ -185,6 +252,17 @@ func TestFetchRepomdSignature(t *testing.T) {
 	assert.Equal(t, signature, r.repomdSignature)
 	assert.Equal(t, 200, code)
 	assert.Nil(t, err)
+}
+
+func TestParseCompsXML(t *testing.T) {
+	path := "mocks/comps.xml"
+	xmlFile, err := os.Open(path)
+	assert.NoError(t, err)
+	defer xmlFile.Close()
+	packageGroups, environments, err := ParseCompsXML(xmlFile)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, packageGroups)
+	assert.NotEmpty(t, environments)
 }
 
 // if the xml is half complete, you get a parse error
@@ -244,6 +322,7 @@ func server() *httptest.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/repodata/repomd.xml", serveRepomdXML)
 	mux.HandleFunc("/repodata/primary.xml.gz", servePrimaryXML)
+	mux.HandleFunc("/repodata/comps.xml", serveCompsXML)
 	mux.HandleFunc("/repodata/repomd.xml.asc", serveSignatureXML)
 	mux.HandleFunc("/gpgkey.pub", serveGPGKey)
 	return httptest.NewServer(mux)
@@ -258,6 +337,12 @@ func serveRepomdXML(w http.ResponseWriter, r *http.Request) {
 func servePrimaryXML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/gzip")
 	body := primaryXML
+	_, _ = w.Write(body)
+}
+
+func serveCompsXML(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "text/xml")
+	body := compsXML
 	_, _ = w.Write(body)
 }
 

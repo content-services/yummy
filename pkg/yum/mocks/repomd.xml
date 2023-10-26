@@ -24,6 +24,12 @@
 <open-checksum type="sha256">dff2c3b65b1c2636b99510afd7e4ec36d9db996f16cc6e2485a62f04894d0476</open-checksum>
 <location href="repodata/primary.xml.gz"/>
 </data>
+<data type="group">
+<checksum type="sha256">9585b88283adb08e9b70345ed8fb02e0a0cb212adc9fd810822c44112cec059c</checksum>
+<location href="repodata/comps.xml"/>
+<timestamp>1698193209</timestamp>
+<size>406830</size>
+</data>
 <data type="updateinfo">
 <location href="repodata/updateinfo.xml.gz"/>
 <checksum type="sha256">1a3f4adf9a598d5badaaef70e67a0f02198c68ca118f5543a91c3fd8ca95c6aa</checksum>
