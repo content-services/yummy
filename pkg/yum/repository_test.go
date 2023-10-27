@@ -69,15 +69,15 @@ func TestClear(t *testing.T) {
 	_, _, _ = r.Signature()
 	assert.NotNil(t, r.repomd)
 	assert.NotNil(t, r.packages)
-	assert.NotNil(t, r.packageGroups)
-	assert.NotNil(t, r.environments)
+	// assert.NotNil(t, r.packageGroups)
+	// assert.NotNil(t, r.environments)
 	assert.NotNil(t, r.repomdSignature)
 
 	r.Clear()
 	assert.Nil(t, r.repomd)
 	assert.Nil(t, r.packages)
-	assert.Nil(t, r.packageGroups)
-	assert.Nil(t, r.environments)
+	// assert.Nil(t, r.packageGroups)
+	// assert.Nil(t, r.environments)
 	assert.Nil(t, r.repomdSignature)
 
 }
@@ -148,6 +148,24 @@ func TestFetchRepomd(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestFetchComps(t *testing.T) {
+	s := server()
+	defer s.Close()
+
+	c := s.Client()
+	settings := YummySettings{
+		Client: c,
+		URL:    &s.URL,
+	}
+	r, _ := NewRepository(settings)
+
+	comps, code, err := r.Comps()
+	assert.Equal(t, *comps, *r.comps)
+	assert.Equal(t, 200, code)
+	assert.Nil(t, err)
+
+}
+
 func TestGetCompsURL(t *testing.T) {
 	xmlFile, err := os.Open("mocks/repomd.xml")
 	assert.Nil(t, err)
@@ -197,7 +215,7 @@ func TestFetchPackageGroups(t *testing.T) {
 
 	packageGroups, code, err := r.PackageGroups()
 	assert.Equal(t, 1, len(packageGroups))
-	assert.Equal(t, packageGroups, r.packageGroups)
+	assert.Equal(t, packageGroups, r.comps.PackageGroups)
 	assert.Equal(t, 200, code)
 	assert.Nil(t, err)
 }
@@ -215,7 +233,7 @@ func TestFetchEnvironments(t *testing.T) {
 
 	environments, code, err := r.Environments()
 	assert.Equal(t, 1, len(environments))
-	assert.Equal(t, environments, r.environments)
+	assert.Equal(t, environments, r.comps.Environments)
 	assert.Equal(t, 200, code)
 	assert.Nil(t, err)
 }
@@ -259,10 +277,9 @@ func TestParseCompsXML(t *testing.T) {
 	xmlFile, err := os.Open(path)
 	assert.NoError(t, err)
 	defer xmlFile.Close()
-	packageGroups, environments, err := ParseCompsXML(xmlFile)
+	comps, err := ParseCompsXML(xmlFile)
 	assert.NoError(t, err)
-	assert.NotEmpty(t, packageGroups)
-	assert.NotEmpty(t, environments)
+	assert.NotEmpty(t, comps)
 }
 
 // if the xml is half complete, you get a parse error

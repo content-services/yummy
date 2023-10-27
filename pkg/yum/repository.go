@@ -86,11 +86,17 @@ type EnvironmentName string
 
 type EnvironmentDescription string
 
+type Comps struct {
+	PackageGroups []PackageGroup
+	Environments  []Environment
+}
+
 type YumRepository interface {
 	Configure(settings YummySettings)
 	Packages() (packages []Package, statusCode int, err error)
 	Repomd() (repomd *Repomd, statusCode int, err error)
 	Signature() (repomdSignature *string, statusCode int, err error)
+	Comps() (comps *Comps, statusCode int, err error)
 	PackageGroups() (packageGroups []PackageGroup, statusCode int, err error)
 	Environments() (environments []Environment, statusCode int, err error)
 	Clear()
@@ -101,8 +107,7 @@ type Repository struct {
 	packages        []Package // Packages repository contains
 	repomdSignature *string   // Signature of the repository
 	repomd          *Repomd   // Repomd of the repository
-	packageGroups   []PackageGroup
-	environments    []Environment
+	comps           *Comps    // Comps of the repository
 }
 
 func NewRepository(settings YummySettings) (Repository, error) {
@@ -136,8 +141,7 @@ func (r *Repository) Clear() {
 	r.repomd = nil
 	r.packages = nil
 	r.repomdSignature = nil
-	r.packageGroups = nil
-	r.environments = nil
+	r.comps = nil
 }
 
 // Repomd populates r.Repomd with repository's repomd.xml metadata. Returns Repomd, response code, and error.
@@ -178,6 +182,40 @@ func erroredStatusCode(response *http.Response) int {
 	}
 }
 
+func (r *Repository) Comps() (*Comps, int, error) {
+	var err error
+	var compsURL string
+	var resp *http.Response
+	var comps Comps
+
+	if r.comps != nil {
+		return r.comps, 200, nil
+	}
+
+	if _, _, err = r.Repomd(); err != nil {
+		return nil, 0, fmt.Errorf("error parsing repomd.xml: %w", err)
+	}
+
+	if compsURL, err = r.getCompsURL(); err != nil {
+		return nil, 0, fmt.Errorf("error parsing Comps URL: %w", err)
+	}
+
+	if resp, err = r.settings.Client.Get(compsURL); err != nil {
+		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", compsURL, err)
+	}
+
+	defer resp.Body.Close()
+
+	if comps, err = ParseCompsXML(resp.Body); err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
+	}
+
+	r.comps = &comps
+
+	return r.comps, resp.StatusCode, nil
+
+}
+
 // Packages populates r.Packages with metadata of each package in repository. Returns response code and error.
 // If the packages were successfully fetched previously, will return cached packages.
 func (r *Repository) Packages() ([]Package, int, error) {
@@ -215,72 +253,42 @@ func (r *Repository) Packages() ([]Package, int, error) {
 	return packages, resp.StatusCode, nil
 }
 
-// IP: PackageGroups populates r.PackageGroups with the package groups of a repository. Returns response code and error.
+// PackageGroups populates r.PackageGroups with the package groups of a repository. Returns response code and error.
 func (r *Repository) PackageGroups() ([]PackageGroup, int, error) {
 	var err error
-	var compsURL string
-	var resp *http.Response
-	var packageGroups []PackageGroup
+	var status int
+	var comps *Comps
 
-	if r.packageGroups != nil {
-		return r.packageGroups, 0, nil
+	if r.comps != nil && r.comps.PackageGroups != nil {
+		return r.comps.PackageGroups, 200, nil
 	}
 
-	if _, _, err = r.Repomd(); err != nil {
-		return nil, 0, fmt.Errorf("error parsing repomd.xml: %w", err)
+	if comps, status, err = r.Comps(); err != nil {
+		return nil, 0, fmt.Errorf("error getting comps: %w", err)
 	}
 
-	if compsURL, err = r.getCompsURL(); err != nil {
-		return nil, 0, fmt.Errorf("error parsing Comps URL: %w", err)
-	}
+	r.comps.PackageGroups = comps.PackageGroups
 
-	if resp, err = r.settings.Client.Get(compsURL); err != nil {
-		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", compsURL, err)
-	}
-
-	defer resp.Body.Close()
-
-	if packageGroups, _, err = ParseCompsXML(resp.Body); err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
-	}
-
-	r.packageGroups = packageGroups
-
-	return packageGroups, resp.StatusCode, nil
+	return r.comps.PackageGroups, status, nil
 }
 
-// IP: Environments populates r.Environments with the environments of a repository. Returns response code and error.
+// Environments populates r.Environments with the environments of a repository. Returns response code and error.
 func (r *Repository) Environments() ([]Environment, int, error) {
 	var err error
-	var compsURL string
-	var resp *http.Response
-	var environments []Environment
+	var status int
+	var comps *Comps
 
-	if r.environments != nil {
-		return r.environments, 0, nil
+	if r.comps != nil && r.comps.Environments != nil {
+		return r.comps.Environments, 200, nil
 	}
 
-	if _, _, err = r.Repomd(); err != nil {
-		return nil, 0, fmt.Errorf("error parsing repomd.xml: %w", err)
+	if comps, status, err = r.Comps(); err != nil {
+		return nil, 0, fmt.Errorf("error getting comps: %w", err)
 	}
 
-	if compsURL, err = r.getCompsURL(); err != nil {
-		return nil, 0, fmt.Errorf("error parsing Comps URL: %w", err)
-	}
+	r.comps.Environments = comps.Environments
 
-	if resp, err = r.settings.Client.Get(compsURL); err != nil {
-		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", compsURL, err)
-	}
-
-	defer resp.Body.Close()
-
-	if _, environments, err = ParseCompsXML(resp.Body); err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
-	}
-
-	r.environments = environments
-
-	return environments, resp.StatusCode, nil
+	return r.comps.Environments, status, nil
 }
 
 // Signature fetches the yum metadata signature and returns any error and HTTP code encountered.
@@ -405,13 +413,14 @@ func ParseRepomdXML(body io.ReadCloser) (Repomd, error) {
 }
 
 // ParseCompsXML creates PackageGroup array and Environment array from comps.xml body response
-func ParseCompsXML(body io.ReadCloser) ([]PackageGroup, []Environment, error) {
+func ParseCompsXML(body io.ReadCloser) (Comps, error) {
+	var comps Comps
 	packageGroups := []PackageGroup{}
 	environments := []Environment{}
 
 	byteValue, err := io.ReadAll(body)
 	if err != nil {
-		return packageGroups, environments, fmt.Errorf("io.reader read failure: %w", err)
+		return comps, fmt.Errorf("io.reader read failure: %w", err)
 	}
 
 	decoder := xml.NewDecoder(bytes.NewReader(byteValue))
@@ -422,7 +431,7 @@ func ParseCompsXML(body io.ReadCloser) ([]PackageGroup, []Environment, error) {
 		if decodeError == io.EOF {
 			break
 		} else if decodeError != nil {
-			return packageGroups, environments, fmt.Errorf("error decoding token: %w", decodeError)
+			return comps, fmt.Errorf("error decoding token: %w", decodeError)
 		} else if t == nil {
 			break
 		}
@@ -432,20 +441,20 @@ func ParseCompsXML(body io.ReadCloser) ([]PackageGroup, []Environment, error) {
 			if elType.Name.Local == "group" {
 				var packageGroup PackageGroup
 				if decodeElementError := decoder.DecodeElement(&packageGroup, &elType); decodeElementError != nil {
-					return packageGroups, environments, decodeElementError
+					return comps, decodeElementError
 				}
 				packageGroups = append(packageGroups, packageGroup)
 			} else if elType.Name.Local == "environment" {
 				var environment Environment
 				if decodeElementError := decoder.DecodeElement(&environment, &elType); decodeElementError != nil {
-					return packageGroups, environments, decodeElementError
+					return comps, decodeElementError
 				}
 				environments = append(environments, environment)
 			}
 		}
 	}
 
-	return packageGroups, environments, err
+	return Comps{packageGroups, environments}, err
 }
 
 // Custom unmarshal methods for localized elements
