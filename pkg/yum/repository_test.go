@@ -64,21 +64,18 @@ func TestClear(t *testing.T) {
 
 	_, _, _ = r.Repomd()
 	_, _, _ = r.Packages()
-	_, _, _ = r.PackageGroups()
-	_, _, _ = r.Environments()
 	_, _, _ = r.Signature()
+	_, _, _ = r.Comps()
 	assert.NotNil(t, r.repomd)
 	assert.NotNil(t, r.packages)
-	// assert.NotNil(t, r.packageGroups)
-	// assert.NotNil(t, r.environments)
 	assert.NotNil(t, r.repomdSignature)
+	assert.NotNil(t, r.comps)
 
 	r.Clear()
 	assert.Nil(t, r.repomd)
 	assert.Nil(t, r.packages)
-	// assert.Nil(t, r.packageGroups)
-	// assert.Nil(t, r.environments)
 	assert.Nil(t, r.repomdSignature)
+	assert.Nil(t, r.comps)
 
 }
 func TestGetPrimaryURL(t *testing.T) {
@@ -163,7 +160,6 @@ func TestFetchComps(t *testing.T) {
 	assert.Equal(t, *comps, *r.comps)
 	assert.Equal(t, 200, code)
 	assert.Nil(t, err)
-
 }
 
 func TestGetCompsURL(t *testing.T) {
