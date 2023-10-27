@@ -213,7 +213,6 @@ func (r *Repository) Comps() (*Comps, int, error) {
 	r.comps = &comps
 
 	return r.comps, resp.StatusCode, nil
-
 }
 
 // Packages populates r.Packages with metadata of each package in repository. Returns response code and error.
