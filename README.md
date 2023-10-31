@@ -33,6 +33,12 @@ packages, statusCode, err := repo.Packages()
 
 // To get repository signature
 signature, statusCode, err := repo.Signature()
+
+// To get repository package groups
+packageGroups, statusCode, err := repo.PackageGroups()
+
+// To get repository environments
+environments, statusCode, err := repo.Environments()
 ```  
 
 **To parse packages from a yum repository on disk**

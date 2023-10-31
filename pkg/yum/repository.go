@@ -2,6 +2,7 @@ package yum
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"encoding/xml"
 	"fmt"
@@ -53,6 +54,7 @@ type Data struct {
 	Type     string   `xml:"type,attr"`
 	Location Location `xml:"location"`
 }
+
 type Location struct {
 	Href string `xml:"href,attr"`
 }
@@ -63,11 +65,40 @@ type YummySettings struct {
 	MaxXmlSize *int64
 }
 
+type PackageGroup struct {
+	ID          string                  `xml:"id"`
+	Name        PackageGroupName        `xml:"name"`
+	Description PackageGroupDescription `xml:"description"`
+	PackageList []string                `xml:"packagelist>packagereq"`
+}
+
+type PackageGroupName string
+
+type PackageGroupDescription string
+
+type Environment struct {
+	ID          string                 `xml:"id"`
+	Name        EnvironmentName        `xml:"name"`
+	Description EnvironmentDescription `xml:"description"`
+}
+
+type EnvironmentName string
+
+type EnvironmentDescription string
+
+type Comps struct {
+	PackageGroups []PackageGroup
+	Environments  []Environment
+}
+
 type YumRepository interface {
 	Configure(settings YummySettings)
 	Packages() (packages []Package, statusCode int, err error)
 	Repomd() (repomd *Repomd, statusCode int, err error)
 	Signature() (repomdSignature *string, statusCode int, err error)
+	Comps() (comps *Comps, statusCode int, err error)
+	PackageGroups() (packageGroups []PackageGroup, statusCode int, err error)
+	Environments() (environments []Environment, statusCode int, err error)
 	Clear()
 }
 
@@ -76,6 +107,7 @@ type Repository struct {
 	packages        []Package // Packages repository contains
 	repomdSignature *string   // Signature of the repository
 	repomd          *Repomd   // Repomd of the repository
+	comps           *Comps    // Comps of the repository
 }
 
 func NewRepository(settings YummySettings) (Repository, error) {
@@ -109,6 +141,7 @@ func (r *Repository) Clear() {
 	r.repomd = nil
 	r.packages = nil
 	r.repomdSignature = nil
+	r.comps = nil
 }
 
 // Repomd populates r.Repomd with repository's repomd.xml metadata. Returns Repomd, response code, and error.
@@ -149,6 +182,39 @@ func erroredStatusCode(response *http.Response) int {
 	}
 }
 
+func (r *Repository) Comps() (*Comps, int, error) {
+	var err error
+	var compsURL string
+	var resp *http.Response
+	var comps Comps
+
+	if r.comps != nil {
+		return r.comps, 200, nil
+	}
+
+	if _, _, err = r.Repomd(); err != nil {
+		return nil, 0, fmt.Errorf("error parsing repomd.xml: %w", err)
+	}
+
+	if compsURL, err = r.getCompsURL(); err != nil {
+		return nil, 0, fmt.Errorf("error parsing Comps URL: %w", err)
+	}
+
+	if resp, err = r.settings.Client.Get(compsURL); err != nil {
+		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", compsURL, err)
+	}
+
+	defer resp.Body.Close()
+
+	if comps, err = ParseCompsXML(resp.Body); err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
+	}
+
+	r.comps = &comps
+
+	return r.comps, resp.StatusCode, nil
+}
+
 // Packages populates r.Packages with metadata of each package in repository. Returns response code and error.
 // If the packages were successfully fetched previously, will return cached packages.
 func (r *Repository) Packages() ([]Package, int, error) {
@@ -184,6 +250,44 @@ func (r *Repository) Packages() ([]Package, int, error) {
 	r.packages = packages
 
 	return packages, resp.StatusCode, nil
+}
+
+// PackageGroups populates r.PackageGroups with the package groups of a repository. Returns response code and error.
+func (r *Repository) PackageGroups() ([]PackageGroup, int, error) {
+	var err error
+	var status int
+	var comps *Comps
+
+	if r.comps != nil && r.comps.PackageGroups != nil {
+		return r.comps.PackageGroups, 200, nil
+	}
+
+	if comps, status, err = r.Comps(); err != nil {
+		return nil, 0, fmt.Errorf("error getting comps: %w", err)
+	}
+
+	r.comps.PackageGroups = comps.PackageGroups
+
+	return r.comps.PackageGroups, status, nil
+}
+
+// Environments populates r.Environments with the environments of a repository. Returns response code and error.
+func (r *Repository) Environments() ([]Environment, int, error) {
+	var err error
+	var status int
+	var comps *Comps
+
+	if r.comps != nil && r.comps.Environments != nil {
+		return r.comps.Environments, 200, nil
+	}
+
+	if comps, status, err = r.Comps(); err != nil {
+		return nil, 0, fmt.Errorf("error getting comps: %w", err)
+	}
+
+	r.comps.Environments = comps.Environments
+
+	return r.comps.Environments, status, nil
 }
 
 // Signature fetches the yum metadata signature and returns any error and HTTP code encountered.
@@ -223,6 +327,27 @@ func (r *Repository) getRepomdURL() (string, error) {
 	}
 	u.Path = path.Join(u.Path, "/repodata/repomd.xml")
 	return u.String(), nil
+}
+
+func (r *Repository) getCompsURL() (string, error) {
+	var compsLocation string
+
+	for _, data := range r.repomd.Data {
+		if data.Type == "group" {
+			compsLocation = data.Location.Href
+		}
+	}
+
+	if compsLocation == "" {
+		return "", fmt.Errorf("GET error: Unable to parse 'comps' location in repomd.xml")
+	}
+
+	url, err := url.Parse(*r.settings.URL)
+	if err != nil {
+		return "", err
+	}
+	url.Path = path.Join(url.Path, compsLocation)
+	return url.String(), nil
 }
 
 func (r *Repository) getSignatureURL() (string, error) {
@@ -284,6 +409,96 @@ func ParseRepomdXML(body io.ReadCloser) (Repomd, error) {
 	result.RepomdString = &repomdString
 
 	return result, err
+}
+
+// ParseCompsXML creates PackageGroup array and Environment array from comps.xml body response
+func ParseCompsXML(body io.ReadCloser) (Comps, error) {
+	var comps Comps
+	packageGroups := []PackageGroup{}
+	environments := []Environment{}
+
+	byteValue, err := io.ReadAll(body)
+	if err != nil {
+		return comps, fmt.Errorf("io.reader read failure: %w", err)
+	}
+
+	decoder := xml.NewDecoder(bytes.NewReader(byteValue))
+
+	for {
+		t, decodeError := decoder.Token()
+
+		if decodeError == io.EOF {
+			break
+		} else if decodeError != nil {
+			return comps, fmt.Errorf("error decoding token: %w", decodeError)
+		} else if t == nil {
+			break
+		}
+
+		switch elType := t.(type) {
+		case xml.StartElement:
+			if elType.Name.Local == "group" {
+				var packageGroup PackageGroup
+				if decodeElementError := decoder.DecodeElement(&packageGroup, &elType); decodeElementError != nil {
+					return comps, decodeElementError
+				}
+				packageGroups = append(packageGroups, packageGroup)
+			} else if elType.Name.Local == "environment" {
+				var environment Environment
+				if decodeElementError := decoder.DecodeElement(&environment, &elType); decodeElementError != nil {
+					return comps, decodeElementError
+				}
+				environments = append(environments, environment)
+			}
+		}
+	}
+
+	return Comps{packageGroups, environments}, err
+}
+
+// Custom unmarshal methods for localized elements
+func (pn *PackageGroupName) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var t string
+	if err := d.DecodeElement(&t, &start); err != nil {
+		return err
+	}
+	if len(start.Attr) == 0 {
+		*pn = PackageGroupName(t)
+	}
+	return nil
+}
+
+func (pd *PackageGroupDescription) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var t string
+	if err := d.DecodeElement(&t, &start); err != nil {
+		return err
+	}
+	if len(start.Attr) == 0 {
+		*pd = PackageGroupDescription(t)
+	}
+	return nil
+}
+
+func (en *EnvironmentName) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var t string
+	if err := d.DecodeElement(&t, &start); err != nil {
+		return err
+	}
+	if len(start.Attr) == 0 {
+		*en = EnvironmentName(t)
+	}
+	return nil
+}
+
+func (ed *EnvironmentDescription) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var t string
+	if err := d.DecodeElement(&t, &start); err != nil {
+		return err
+	}
+	if len(start.Attr) == 0 {
+		*ed = EnvironmentDescription(t)
+	}
+	return nil
 }
 
 // Unzips a compressed body response, then parses the contained XML for package information
