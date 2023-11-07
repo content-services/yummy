@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 
 	"github.com/h2non/filetype"
 	"github.com/h2non/filetype/matchers"
@@ -206,8 +207,10 @@ func (r *Repository) Comps() (*Comps, int, error) {
 
 	defer resp.Body.Close()
 
-	if comps, err = ParseCompsXML(resp.Body); err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
+	if strings.Contains(compsURL, "comps") {
+		if comps, err = ParseCompsXML(resp.Body); err != nil {
+			return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
+		}
 	}
 
 	r.comps = &comps
@@ -338,9 +341,9 @@ func (r *Repository) getCompsURL() (string, error) {
 		}
 	}
 
-	if compsLocation == "" {
-		return "", fmt.Errorf("GET error: Unable to parse 'comps' location in repomd.xml")
-	}
+	// if compsLocation == "" && !ignoreMissingComps {
+	// 	return "", fmt.Errorf("GET error: Unable to parse 'comps' location in repomd.xml")
+	// }
 
 	url, err := url.Parse(*r.settings.URL)
 	if err != nil {
@@ -418,6 +421,7 @@ func ParseCompsXML(body io.ReadCloser) (Comps, error) {
 	environments := []Environment{}
 
 	byteValue, err := io.ReadAll(body)
+
 	if err != nil {
 		return comps, fmt.Errorf("io.reader read failure: %w", err)
 	}
