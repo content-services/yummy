@@ -341,10 +341,6 @@ func (r *Repository) getCompsURL() (string, error) {
 		}
 	}
 
-	// if compsLocation == "" && !ignoreMissingComps {
-	// 	return "", fmt.Errorf("GET error: Unable to parse 'comps' location in repomd.xml")
-	// }
-
 	url, err := url.Parse(*r.settings.URL)
 	if err != nil {
 		return "", err
