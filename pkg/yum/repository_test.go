@@ -177,7 +177,7 @@ func TestGetCompsURL(t *testing.T) {
 
 	comps, err := r.getCompsURL()
 	assert.Nil(t, err)
-	assert.Equal(t, "http://foo.example.com/repo/repodata/comps.xml", comps)
+	assert.Equal(t, "http://foo.example.com/repo/repodata/comps.xml", *comps)
 
 	// test repo with no comps.xml
 	xmlFile, err = os.Open("mocks/repomd-nocomps.xml")
@@ -195,7 +195,7 @@ func TestGetCompsURL(t *testing.T) {
 
 	comps, err = r.getCompsURL()
 	assert.Nil(t, err)
-	assert.NotContains(t, comps, "comps")
+	assert.Nil(t, comps)
 }
 
 func TestFetchPackages(t *testing.T) {

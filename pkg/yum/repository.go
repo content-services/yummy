@@ -184,7 +184,7 @@ func erroredStatusCode(response *http.Response) int {
 
 func (r *Repository) Comps() (*Comps, int, error) {
 	var err error
-	var compsURL string
+	var compsURL *string
 	var resp *http.Response
 	var comps Comps
 
@@ -200,15 +200,13 @@ func (r *Repository) Comps() (*Comps, int, error) {
 		return nil, 0, fmt.Errorf("error parsing Comps URL: %w", err)
 	}
 
-	if compsURL != "" {
-		if resp, err = r.settings.Client.Get(compsURL); err != nil {
+	if compsURL != nil {
+		if resp, err = r.settings.Client.Get(*compsURL); err != nil {
 			return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", compsURL, err)
 		}
 
 		defer resp.Body.Close()
-	}
 
-	if compsURL != "" {
 		if comps, err = ParseCompsXML(resp.Body); err != nil {
 			return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
 		}
@@ -272,7 +270,7 @@ func (r *Repository) PackageGroups() ([]PackageGroup, int, error) {
 		return nil, 0, fmt.Errorf("error getting comps: %w", err)
 	}
 
-	if compsURL, _ := r.getCompsURL(); compsURL != "" {
+	if compsURL, _ := r.getCompsURL(); compsURL != nil {
 		r.comps.PackageGroups = comps.PackageGroups
 		return r.comps.PackageGroups, status, nil
 	}
@@ -295,7 +293,7 @@ func (r *Repository) Environments() ([]Environment, int, error) {
 		return nil, 0, fmt.Errorf("error getting comps: %w", err)
 	}
 
-	if compsURL, _ := r.getCompsURL(); compsURL != "" {
+	if compsURL, _ := r.getCompsURL(); compsURL != nil {
 		r.comps.Environments = comps.Environments
 		return r.comps.Environments, status, nil
 	}
@@ -342,7 +340,7 @@ func (r *Repository) getRepomdURL() (string, error) {
 	return u.String(), nil
 }
 
-func (r *Repository) getCompsURL() (string, error) {
+func (r *Repository) getCompsURL() (*string, error) {
 	var compsLocation string
 
 	for _, data := range r.repomd.Data {
@@ -352,15 +350,15 @@ func (r *Repository) getCompsURL() (string, error) {
 	}
 
 	if compsLocation == "" {
-		return "", nil
+		return nil, nil
 	}
 
 	url, err := url.Parse(*r.settings.URL)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	url.Path = path.Join(url.Path, compsLocation)
-	return url.String(), nil
+	return pointy.Pointer(url.String()), nil
 }
 
 func (r *Repository) getSignatureURL() (string, error) {
