@@ -177,7 +177,25 @@ func TestGetCompsURL(t *testing.T) {
 
 	comps, err := r.getCompsURL()
 	assert.Nil(t, err)
-	assert.Equal(t, "http://foo.example.com/repo/repodata/comps.xml", comps)
+	assert.Equal(t, "http://foo.example.com/repo/repodata/comps.xml", *comps)
+
+	// test repo with no comps.xml
+	xmlFile, err = os.Open("mocks/repomd-nocomps.xml")
+	assert.Nil(t, err)
+
+	settings = YummySettings{
+		URL: pointy.String("http://foo.example.com/repo/"),
+	}
+	r, err = NewRepository(settings)
+	assert.Nil(t, err)
+
+	repomd, err = ParseRepomdXML(xmlFile)
+	assert.Nil(t, err)
+	r.repomd = &repomd
+
+	comps, err = r.getCompsURL()
+	assert.Nil(t, err)
+	assert.Nil(t, comps)
 }
 
 func TestFetchPackages(t *testing.T) {

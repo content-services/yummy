@@ -184,7 +184,7 @@ func erroredStatusCode(response *http.Response) int {
 
 func (r *Repository) Comps() (*Comps, int, error) {
 	var err error
-	var compsURL string
+	var compsURL *string
 	var resp *http.Response
 	var comps Comps
 
@@ -200,19 +200,23 @@ func (r *Repository) Comps() (*Comps, int, error) {
 		return nil, 0, fmt.Errorf("error parsing Comps URL: %w", err)
 	}
 
-	if resp, err = r.settings.Client.Get(compsURL); err != nil {
-		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", compsURL, err)
+	if compsURL != nil {
+		if resp, err = r.settings.Client.Get(*compsURL); err != nil {
+			return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", compsURL, err)
+		}
+
+		defer resp.Body.Close()
+
+		if comps, err = ParseCompsXML(resp.Body); err != nil {
+			return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
+		}
+
+		r.comps = &comps
+
+		return r.comps, resp.StatusCode, nil
 	}
 
-	defer resp.Body.Close()
-
-	if comps, err = ParseCompsXML(resp.Body); err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
-	}
-
-	r.comps = &comps
-
-	return r.comps, resp.StatusCode, nil
+	return nil, 200, nil
 }
 
 // Packages populates r.Packages with metadata of each package in repository. Returns response code and error.
@@ -266,9 +270,13 @@ func (r *Repository) PackageGroups() ([]PackageGroup, int, error) {
 		return nil, 0, fmt.Errorf("error getting comps: %w", err)
 	}
 
-	r.comps.PackageGroups = comps.PackageGroups
+	if compsURL, _ := r.getCompsURL(); compsURL != nil {
+		r.comps.PackageGroups = comps.PackageGroups
+		return r.comps.PackageGroups, status, nil
+	}
 
-	return r.comps.PackageGroups, status, nil
+	return nil, status, nil
+
 }
 
 // Environments populates r.Environments with the environments of a repository. Returns response code and error.
@@ -285,9 +293,12 @@ func (r *Repository) Environments() ([]Environment, int, error) {
 		return nil, 0, fmt.Errorf("error getting comps: %w", err)
 	}
 
-	r.comps.Environments = comps.Environments
+	if compsURL, _ := r.getCompsURL(); compsURL != nil {
+		r.comps.Environments = comps.Environments
+		return r.comps.Environments, status, nil
+	}
 
-	return r.comps.Environments, status, nil
+	return nil, status, nil
 }
 
 // Signature fetches the yum metadata signature and returns any error and HTTP code encountered.
@@ -329,7 +340,7 @@ func (r *Repository) getRepomdURL() (string, error) {
 	return u.String(), nil
 }
 
-func (r *Repository) getCompsURL() (string, error) {
+func (r *Repository) getCompsURL() (*string, error) {
 	var compsLocation string
 
 	for _, data := range r.repomd.Data {
@@ -339,15 +350,15 @@ func (r *Repository) getCompsURL() (string, error) {
 	}
 
 	if compsLocation == "" {
-		return "", fmt.Errorf("GET error: Unable to parse 'comps' location in repomd.xml")
+		return nil, nil
 	}
 
 	url, err := url.Parse(*r.settings.URL)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	url.Path = path.Join(url.Path, compsLocation)
-	return url.String(), nil
+	return pointy.Pointer(url.String()), nil
 }
 
 func (r *Repository) getSignatureURL() (string, error) {
@@ -418,6 +429,7 @@ func ParseCompsXML(body io.ReadCloser) (Comps, error) {
 	environments := []Environment{}
 
 	byteValue, err := io.ReadAll(body)
+
 	if err != nil {
 		return comps, fmt.Errorf("io.reader read failure: %w", err)
 	}
