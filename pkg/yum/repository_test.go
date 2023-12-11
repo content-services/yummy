@@ -76,7 +76,6 @@ func TestClear(t *testing.T) {
 	assert.Nil(t, r.packages)
 	assert.Nil(t, r.repomdSignature)
 	assert.Nil(t, r.comps)
-
 }
 func TestGetPrimaryURL(t *testing.T) {
 	xmlFile, err := os.Open("mocks/repomd.xml")

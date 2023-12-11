@@ -276,7 +276,6 @@ func (r *Repository) PackageGroups() ([]PackageGroup, int, error) {
 	}
 
 	return nil, status, nil
-
 }
 
 // Environments populates r.Environments with the environments of a repository. Returns response code and error.
