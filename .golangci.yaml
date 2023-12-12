@@ -1,0 +1,14 @@
+# Configuration for golangci-lint. See https://golangci-lint.run/usage/configuration/.
+linters:
+  disable-all: false # use default linters
+  enable:
+    - gofmt
+    - whitespace
+    - govet
+    - misspell
+    - forcetypeassert
+    - gci
+    - bodyclose
+issues:
+  exclude:
+    - composite
