@@ -286,13 +286,19 @@ func TestFetchRepomdSignature(t *testing.T) {
 }
 
 func TestParseCompsXML(t *testing.T) {
-	path := "mocks/comps.xml"
-	xmlFile, err := os.Open(path)
-	assert.NoError(t, err)
-	defer xmlFile.Close()
-	comps, err := ParseCompsXML(xmlFile)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, comps)
+	paths := []string{
+		"mocks/comps.xml.gz",
+		"mocks/comps.xml",
+	}
+
+	for _, path := range paths {
+		xmlFile, err := os.Open(path)
+		assert.NoError(t, err)
+		defer xmlFile.Close()
+		comps, err := ParseCompsXML(xmlFile, &path)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, comps)
+	}
 }
 
 // if the xml is half complete, you get a parse error

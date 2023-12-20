@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 
 	"github.com/h2non/filetype"
 	"github.com/h2non/filetype/matchers"
@@ -207,7 +208,7 @@ func (r *Repository) Comps() (*Comps, int, error) {
 
 		defer resp.Body.Close()
 
-		if comps, err = ParseCompsXML(resp.Body); err != nil {
+		if comps, err = ParseCompsXML(resp.Body, compsURL); err != nil {
 			return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
 		}
 
@@ -422,18 +423,52 @@ func ParseRepomdXML(body io.ReadCloser) (Repomd, error) {
 }
 
 // ParseCompsXML creates PackageGroup array and Environment array from comps.xml body response
-func ParseCompsXML(body io.ReadCloser) (Comps, error) {
+func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
+	var reader io.Reader
 	var comps Comps
 	packageGroups := []PackageGroup{}
 	environments := []Environment{}
 
 	byteValue, err := io.ReadAll(body)
-
 	if err != nil {
 		return comps, fmt.Errorf("io.reader read failure: %w", err)
 	}
 
-	decoder := xml.NewDecoder(bytes.NewReader(byteValue))
+	fileExtension := filepath.Ext(*url)
+
+	// handle uncompressed comps
+	if fileExtension == ".xml" {
+		reader = bytes.NewReader(byteValue)
+	} else {
+		// handle compressed comps
+		bufferedReader := bufio.NewReader(bytes.NewReader(byteValue))
+
+		header, err := bufferedReader.Peek(20)
+		if err != nil {
+			return comps, err
+		}
+
+		fileType, err := filetype.Match(header)
+		if err != nil {
+			return comps, err
+		}
+
+		switch fileType {
+		case matchers.TypeGz:
+			reader, err = gzip.NewReader(bufferedReader)
+		case matchers.TypeZstd:
+			reader, err = zstd.NewReader(bufferedReader)
+		case matchers.TypeXz:
+			reader, err = xz.NewReader(bufferedReader)
+		default:
+			return comps, fmt.Errorf("invalid file type: must be gzip, xz, or zstd")
+		}
+		if err != nil {
+			return comps, fmt.Errorf("error unzipping response body: %w", err)
+		}
+	}
+
+	decoder := xml.NewDecoder(reader)
 
 	for {
 		t, decodeError := decoder.Token()
