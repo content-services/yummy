@@ -441,30 +441,9 @@ func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
 		reader = bytes.NewReader(byteValue)
 	} else {
 		// handle compressed comps
-		bufferedReader := bufio.NewReader(bytes.NewReader(byteValue))
-
-		header, err := bufferedReader.Peek(20)
+		reader, err = ParseCompressedData(bytes.NewReader(byteValue))
 		if err != nil {
 			return comps, err
-		}
-
-		fileType, err := filetype.Match(header)
-		if err != nil {
-			return comps, err
-		}
-
-		switch fileType {
-		case matchers.TypeGz:
-			reader, err = gzip.NewReader(bufferedReader)
-		case matchers.TypeZstd:
-			reader, err = zstd.NewReader(bufferedReader)
-		case matchers.TypeXz:
-			reader, err = xz.NewReader(bufferedReader)
-		default:
-			return comps, fmt.Errorf("invalid file type: must be gzip, xz, or zstd")
-		}
-		if err != nil {
-			return comps, fmt.Errorf("error unzipping response body: %w", err)
 		}
 	}
 
@@ -557,34 +536,9 @@ func ParseCompressedXMLData(body io.Reader, maxSize int64) ([]Package, error) {
 	var err error
 	result := []Package{}
 
-	bufferedReader := bufio.NewReader(body)
-
-	// peek at the first bytes to determine the type
-	header, err := bufferedReader.Peek(20)
+	reader, err = ParseCompressedData(body)
 	if err != nil {
-		return result, err
-	}
-
-	if err != nil {
-		return []Package{}, err
-	}
-	fileType, err := filetype.Match(header)
-	if err != nil {
-		return []Package{}, err
-	}
-
-	switch fileType {
-	case matchers.TypeGz:
-		reader, err = gzip.NewReader(bufferedReader)
-	case matchers.TypeZstd:
-		reader, err = zstd.NewReader(bufferedReader)
-	case matchers.TypeXz:
-		reader, err = xz.NewReader(bufferedReader)
-	default:
-		return []Package{}, fmt.Errorf("invalid file type: must be gzip, xz, or zstd.")
-	}
-	if err != nil {
-		return []Package{}, fmt.Errorf("Error unzipping response body: %w", err)
+		return []Package{}, fmt.Errorf("error unzipping response body: %w", err)
 	}
 
 	limitedReader := io.LimitReader(reader, maxSize)
@@ -598,7 +552,7 @@ func ParseCompressedXMLData(body io.Reader, maxSize int64) ([]Package, error) {
 		if decodeError == io.EOF {
 			break
 		} else if decodeError != nil {
-			return []Package{}, fmt.Errorf("Error decoding token: %w", decodeError)
+			return []Package{}, fmt.Errorf("error decoding token: %w", decodeError)
 		} else if t == nil {
 			break
 		}
@@ -623,4 +577,37 @@ func ParseCompressedXMLData(body io.Reader, maxSize int64) ([]Package, error) {
 	}
 
 	return result, nil
+}
+
+func ParseCompressedData(body io.Reader) (io.Reader, error) {
+	var reader io.Reader
+
+	bufferedReader := bufio.NewReader(body)
+
+	// peek at the first bytes to determine the type
+	header, err := bufferedReader.Peek(20)
+	if err != nil {
+		return nil, err
+	}
+
+	fileType, err := filetype.Match(header)
+	if err != nil {
+		return nil, err
+	}
+
+	switch fileType {
+	case matchers.TypeGz:
+		reader, err = gzip.NewReader(bufferedReader)
+	case matchers.TypeZstd:
+		reader, err = zstd.NewReader(bufferedReader)
+	case matchers.TypeXz:
+		reader, err = xz.NewReader(bufferedReader)
+	default:
+		return nil, fmt.Errorf("invalid file type: must be gzip, xz, or zstd")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error unzipping response body: %w", err)
+	}
+
+	return reader, err
 }
