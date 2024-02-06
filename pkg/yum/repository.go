@@ -344,7 +344,9 @@ func (r *Repository) getCompsURL() (*string, error) {
 	var compsLocation string
 
 	for _, data := range r.repomd.Data {
-		if data.Type == "group" {
+		if data.Type == "group_gz" {
+			compsLocation = data.Location.Href
+		} else if data.Type == "group" {
 			compsLocation = data.Location.Href
 		}
 	}
@@ -437,7 +439,7 @@ func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
 	fileExtension := filepath.Ext(*url)
 
 	// handle uncompressed comps
-	if fileExtension == ".xml" {
+	if fileExtension == ".xml" || fileExtension == "" {
 		reader = bytes.NewReader(byteValue)
 	} else {
 		// handle compressed comps
