@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"path/filepath"
 
 	"github.com/h2non/filetype"
 	"github.com/h2non/filetype/matchers"
@@ -344,7 +343,9 @@ func (r *Repository) getCompsURL() (*string, error) {
 	var compsLocation string
 
 	for _, data := range r.repomd.Data {
-		if data.Type == "group" {
+		if data.Type == "group_gz" {
+			compsLocation = data.Location.Href
+		} else if data.Type == "group" {
 			compsLocation = data.Location.Href
 		}
 	}
@@ -434,17 +435,26 @@ func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
 		return comps, fmt.Errorf("io.reader read failure: %w", err)
 	}
 
-	fileExtension := filepath.Ext(*url)
+	// determine the file type from the header
+	bufferedReader := bufio.NewReader(bytes.NewReader(byteValue))
+	header, err := bufferedReader.Peek(20)
+	if err != nil {
+		return comps, err
+	}
+	fileType, err := filetype.Match(header)
+	if err != nil {
+		return comps, err
+	}
 
-	// handle uncompressed comps
-	if fileExtension == ".xml" {
-		reader = bytes.NewReader(byteValue)
-	} else {
-		// handle compressed comps
+	// handle compressed comps
+	if fileType == matchers.TypeGz || fileType == matchers.TypeZstd || fileType == matchers.TypeXz {
 		reader, err = ParseCompressedData(bytes.NewReader(byteValue))
 		if err != nil {
 			return comps, err
 		}
+		// handle uncompressed comps
+	} else {
+		reader = bytes.NewReader(byteValue)
 	}
 
 	decoder := xml.NewDecoder(reader)
