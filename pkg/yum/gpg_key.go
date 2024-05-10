@@ -1,6 +1,7 @@
 package yum
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,8 +10,12 @@ import (
 )
 
 // FetchGPGKey GETs GPG Key from url with request timeout maximum timeout.
-func FetchGPGKey(url string, client *http.Client) (*string, int, error) {
-	resp, err := client.Get(url)
+func FetchGPGKey(ctx context.Context, url string, client *http.Client) (*string, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error creating request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}

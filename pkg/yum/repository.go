@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -91,14 +92,15 @@ type Comps struct {
 	Environments  []Environment
 }
 
+//go:generate mockery --name YumRepository --filename yum_repository_mock.go --inpackage
 type YumRepository interface {
 	Configure(settings YummySettings)
-	Packages() (packages []Package, statusCode int, err error)
-	Repomd() (repomd *Repomd, statusCode int, err error)
-	Signature() (repomdSignature *string, statusCode int, err error)
-	Comps() (comps *Comps, statusCode int, err error)
-	PackageGroups() (packageGroups []PackageGroup, statusCode int, err error)
-	Environments() (environments []Environment, statusCode int, err error)
+	Packages(ctx context.Context) (packages []Package, statusCode int, err error)
+	Repomd(ctx context.Context) (repomd *Repomd, statusCode int, err error)
+	Signature(ctx context.Context) (repomdSignature *string, statusCode int, err error)
+	Comps(ctx context.Context) (comps *Comps, statusCode int, err error)
+	PackageGroups(ctx context.Context) (packageGroups []PackageGroup, statusCode int, err error)
+	Environments(ctx context.Context) (environments []Environment, statusCode int, err error)
 	Clear()
 }
 
@@ -146,7 +148,7 @@ func (r *Repository) Clear() {
 
 // Repomd populates r.Repomd with repository's repomd.xml metadata. Returns Repomd, response code, and error.
 // If the repomd was successfully fetched previously, will return cached repomd.
-func (r *Repository) Repomd() (*Repomd, int, error) {
+func (r *Repository) Repomd(ctx context.Context) (*Repomd, int, error) {
 	var result Repomd
 	var err error
 	var resp *http.Response
@@ -158,7 +160,13 @@ func (r *Repository) Repomd() (*Repomd, int, error) {
 	if repomdURL, err = r.getRepomdURL(); err != nil {
 		return nil, 0, fmt.Errorf("Error parsing Repomd URL: %w", err)
 	}
-	if resp, err = r.settings.Client.Get(repomdURL); err != nil {
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, repomdURL, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error creating requesting: %w", err)
+	}
+
+	if resp, err = r.settings.Client.Do(req); err != nil {
 		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", repomdURL, err)
 	}
 	defer resp.Body.Close()
@@ -182,7 +190,7 @@ func erroredStatusCode(response *http.Response) int {
 	}
 }
 
-func (r *Repository) Comps() (*Comps, int, error) {
+func (r *Repository) Comps(ctx context.Context) (*Comps, int, error) {
 	var err error
 	var compsURL *string
 	var resp *http.Response
@@ -192,7 +200,7 @@ func (r *Repository) Comps() (*Comps, int, error) {
 		return r.comps, 200, nil
 	}
 
-	if _, _, err = r.Repomd(); err != nil {
+	if _, _, err = r.Repomd(ctx); err != nil {
 		return nil, 0, fmt.Errorf("error parsing repomd.xml: %w", err)
 	}
 
@@ -201,7 +209,12 @@ func (r *Repository) Comps() (*Comps, int, error) {
 	}
 
 	if compsURL != nil {
-		if resp, err = r.settings.Client.Get(*compsURL); err != nil {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, *compsURL, nil)
+		if err != nil {
+			return nil, 0, fmt.Errorf("error creating request: %w", err)
+		}
+
+		if resp, err = r.settings.Client.Do(req); err != nil {
 			return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", compsURL, err)
 		}
 
@@ -221,7 +234,7 @@ func (r *Repository) Comps() (*Comps, int, error) {
 
 // Packages populates r.Packages with metadata of each package in repository. Returns response code and error.
 // If the packages were successfully fetched previously, will return cached packages.
-func (r *Repository) Packages() ([]Package, int, error) {
+func (r *Repository) Packages(ctx context.Context) ([]Package, int, error) {
 	var err error
 	var primaryURL string
 	var resp *http.Response
@@ -231,11 +244,11 @@ func (r *Repository) Packages() ([]Package, int, error) {
 		return r.packages, 0, nil
 	}
 
-	if _, _, err = r.Repomd(); err != nil {
+	if _, _, err = r.Repomd(ctx); err != nil {
 		return nil, 0, fmt.Errorf("error parsing repomd.xml: %w", err)
 	}
 
-	if primaryURL, err = r.getPrimaryURL(); err != nil {
+	if primaryURL, err = r.getPrimaryURL(ctx); err != nil {
 		return nil, 0, fmt.Errorf("Error getting primary URL: %w", err)
 	}
 
@@ -257,7 +270,7 @@ func (r *Repository) Packages() ([]Package, int, error) {
 }
 
 // PackageGroups populates r.PackageGroups with the package groups of a repository. Returns response code and error.
-func (r *Repository) PackageGroups() ([]PackageGroup, int, error) {
+func (r *Repository) PackageGroups(ctx context.Context) ([]PackageGroup, int, error) {
 	var err error
 	var status int
 	var comps *Comps
@@ -266,7 +279,7 @@ func (r *Repository) PackageGroups() ([]PackageGroup, int, error) {
 		return r.comps.PackageGroups, 200, nil
 	}
 
-	if comps, status, err = r.Comps(); err != nil {
+	if comps, status, err = r.Comps(ctx); err != nil {
 		return nil, 0, fmt.Errorf("error getting comps: %w", err)
 	}
 
@@ -279,7 +292,7 @@ func (r *Repository) PackageGroups() ([]PackageGroup, int, error) {
 }
 
 // Environments populates r.Environments with the environments of a repository. Returns response code and error.
-func (r *Repository) Environments() ([]Environment, int, error) {
+func (r *Repository) Environments(ctx context.Context) ([]Environment, int, error) {
 	var err error
 	var status int
 	var comps *Comps
@@ -288,7 +301,7 @@ func (r *Repository) Environments() ([]Environment, int, error) {
 		return r.comps.Environments, 200, nil
 	}
 
-	if comps, status, err = r.Comps(); err != nil {
+	if comps, status, err = r.Comps(ctx); err != nil {
 		return nil, 0, fmt.Errorf("error getting comps: %w", err)
 	}
 
@@ -302,7 +315,7 @@ func (r *Repository) Environments() ([]Environment, int, error) {
 
 // Signature fetches the yum metadata signature and returns any error and HTTP code encountered.
 // If the signature was successfully fetched previously, will return cached signature.
-func (r *Repository) Signature() (*string, int, error) {
+func (r *Repository) Signature(ctx context.Context) (*string, int, error) {
 	var sig *string
 
 	if r.repomdSignature != nil {
@@ -371,10 +384,10 @@ func (r *Repository) getSignatureURL() (string, error) {
 	}
 }
 
-func (r *Repository) getPrimaryURL() (string, error) {
+func (r *Repository) getPrimaryURL(ctx context.Context) (string, error) {
 	var primaryLocation string
 
-	if _, _, err := r.Repomd(); err != nil {
+	if _, _, err := r.Repomd(ctx); err != nil {
 		return "", fmt.Errorf("error fetching Repomd: %w", err)
 	}
 
