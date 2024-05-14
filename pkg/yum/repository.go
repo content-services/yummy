@@ -163,7 +163,7 @@ func (r *Repository) Repomd(ctx context.Context) (*Repomd, int, error) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, repomdURL, nil)
 	if err != nil {
-		return nil, 0, fmt.Errorf("error creating requesting: %w", err)
+		return nil, 0, fmt.Errorf("error creating request: %w", err)
 	}
 
 	if resp, err = r.settings.Client.Do(req); err != nil {
