@@ -25,20 +25,22 @@ settings := YummySettings{
 
 repo, err := NewRepository(settings)
 
+ctx := context.Background()
+
 // To get repomd metadata
-repomd, statusCode, err := repo.Repomd()
+repomd, statusCode, err := repo.Repomd(ctx)
 
 // To get package metadata
-packages, statusCode, err := repo.Packages()
+packages, statusCode, err := repo.Packages(ctx)
 
 // To get repository signature
-signature, statusCode, err := repo.Signature()
+signature, statusCode, err := repo.Signature(ctx)
 
 // To get repository package groups
-packageGroups, statusCode, err := repo.PackageGroups()
+packageGroups, statusCode, err := repo.PackageGroups(ctx)
 
 // To get repository environments
-environments, statusCode, err := repo.Environments()
+environments, statusCode, err := repo.Environments(ctx)
 ```  
 
 **To parse packages from a yum repository on disk**
@@ -56,5 +58,8 @@ environments, statusCode, err := repo.Environments()
 ```go
 url := "https://packages.microsoft.com/keys/microsoft.asc"
 client := http.Client { Timeout: time.Second*10 }   
-gpgKey, statusCode, err := FetchGPGKey(url, client)
+gpgKey, statusCode, err := FetchGPGKey(context.Background(), url, client)
 ```
+
+**Mocking**
+Yum also exports a mock interface you can regenerate using the [mockery](https://github.com/vektra/mockery) tool.

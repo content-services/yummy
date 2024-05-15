@@ -1,6 +1,7 @@
 package yum
 
 import (
+	"context"
 	_ "embed"
 	"encoding/xml"
 	"fmt"
@@ -62,10 +63,12 @@ func TestClear(t *testing.T) {
 	}
 	r, _ := NewRepository(settings)
 
-	_, _, _ = r.Repomd()
-	_, _, _ = r.Packages()
-	_, _, _ = r.Signature()
-	_, _, _ = r.Comps()
+	ctx := context.Background()
+
+	_, _, _ = r.Repomd(ctx)
+	_, _, _ = r.Packages(ctx)
+	_, _, _ = r.Signature(ctx)
+	_, _, _ = r.Comps(ctx)
 	assert.NotNil(t, r.repomd)
 	assert.NotNil(t, r.packages)
 	assert.NotNil(t, r.repomdSignature)
@@ -89,7 +92,7 @@ func TestGetPrimaryURL(t *testing.T) {
 	assert.Nil(t, err)
 	r.repomd = &repomd
 
-	primary, err := r.getPrimaryURL()
+	primary, err := r.getPrimaryURL(context.Background())
 	assert.Nil(t, err)
 	assert.Equal(t, "http://foo.example.com/repo/repodata/primary.xml.gz", primary)
 }
@@ -137,7 +140,7 @@ func TestFetchRepomd(t *testing.T) {
 		RepomdString: &repomdStringMock,
 	}
 
-	repomd, code, err := r.Repomd()
+	repomd, code, err := r.Repomd(context.Background())
 	assert.Equal(t, expected, *repomd)
 	assert.Equal(t, *repomd, *r.repomd)
 	assert.Equal(t, 200, code)
@@ -155,7 +158,7 @@ func TestFetchComps(t *testing.T) {
 	}
 	r, _ := NewRepository(settings)
 
-	comps, code, err := r.Comps()
+	comps, code, err := r.Comps(context.Background())
 	assert.Equal(t, *comps, *r.comps)
 	assert.Equal(t, 200, code)
 	assert.Nil(t, err)
@@ -208,7 +211,7 @@ func TestFetchPackages(t *testing.T) {
 	}
 	r, _ := NewRepository(settings)
 
-	packages, code, err := r.Packages()
+	packages, code, err := r.Packages(context.Background())
 	assert.Equal(t, 2, len(packages))
 	assert.Equal(t, packages, r.packages)
 	assert.Equal(t, 200, code)
@@ -226,7 +229,7 @@ func TestFetchPackageGroups(t *testing.T) {
 	}
 	r, _ := NewRepository(settings)
 
-	packageGroups, code, err := r.PackageGroups()
+	packageGroups, code, err := r.PackageGroups(context.Background())
 	assert.Equal(t, 1, len(packageGroups))
 	assert.Equal(t, packageGroups, r.comps.PackageGroups)
 	assert.Equal(t, 200, code)
@@ -244,7 +247,7 @@ func TestFetchEnvironments(t *testing.T) {
 	}
 	r, _ := NewRepository(settings)
 
-	environments, code, err := r.Environments()
+	environments, code, err := r.Environments(context.Background())
 	assert.Equal(t, 1, len(environments))
 	assert.Equal(t, environments, r.comps.Environments)
 	assert.Equal(t, 200, code)
@@ -262,7 +265,7 @@ func TestBadUrl(t *testing.T) {
 		URL:    &badUrl,
 	}
 	r, _ := NewRepository(settings)
-	_, code, err := r.Repomd()
+	_, code, err := r.Repomd(context.Background())
 	assert.Error(t, err)
 	assert.Equal(t, code, 0)
 }
@@ -278,7 +281,7 @@ func TestFetchRepomdSignature(t *testing.T) {
 	}
 	r, _ := NewRepository(settings)
 
-	signature, code, err := r.Signature()
+	signature, code, err := r.Signature(context.Background())
 	assert.NotEmpty(t, signature)
 	assert.Equal(t, signature, r.repomdSignature)
 	assert.Equal(t, 200, code)

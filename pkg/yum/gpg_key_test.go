@@ -1,6 +1,7 @@
 package yum
 
 import (
+	"context"
 	_ "embed"
 	"net/http"
 	"testing"
@@ -17,7 +18,7 @@ func TestFetchGPGKey(t *testing.T) {
 
 	c := s.Client()
 
-	gpg, code, err := FetchGPGKey(s.URL+"/gpgkey.pub", c)
+	gpg, code, err := FetchGPGKey(context.Background(), s.URL+"/gpgkey.pub", c)
 	assert.NotEmpty(t, gpg)
 	assert.Equal(t, 200, code)
 	assert.Nil(t, err)
