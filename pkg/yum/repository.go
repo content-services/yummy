@@ -15,7 +15,6 @@ import (
 	"github.com/h2non/filetype"
 	"github.com/h2non/filetype/matchers"
 	"github.com/klauspost/compress/zstd"
-	"github.com/openlyinc/pointy"
 	"github.com/ulikunitz/xz"
 )
 
@@ -120,7 +119,7 @@ func NewRepository(settings YummySettings) (Repository, error) {
 		return Repository{}, fmt.Errorf("url cannot be nil")
 	}
 	if settings.MaxXmlSize == nil {
-		settings.MaxXmlSize = pointy.Pointer(DefaultMaxXmlSize)
+		settings.MaxXmlSize = Ptr(DefaultMaxXmlSize)
 	}
 	return Repository{settings: settings}, nil
 }
@@ -372,7 +371,7 @@ func (r *Repository) getCompsURL() (*string, error) {
 		return nil, err
 	}
 	url.Path = path.Join(url.Path, compsLocation)
-	return pointy.Pointer(url.String()), nil
+	return Ptr(url.String()), nil
 }
 
 func (r *Repository) getSignatureURL() (string, error) {

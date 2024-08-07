@@ -6,7 +6,6 @@ require (
 	github.com/ProtonMail/go-crypto v1.0.0
 	github.com/h2non/filetype v1.1.3
 	github.com/klauspost/compress v1.17.9
-	github.com/openlyinc/pointy v1.2.1
 	github.com/stretchr/testify v1.9.0
 	github.com/ulikunitz/xz v0.5.12
 )

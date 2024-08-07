@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openlyinc/pointy"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -84,7 +83,7 @@ func TestGetPrimaryURL(t *testing.T) {
 	xmlFile, err := os.Open("mocks/repomd.xml")
 	assert.Nil(t, err)
 	settings := YummySettings{
-		URL: pointy.String("http://foo.example.com/repo/"),
+		URL: Ptr("http://foo.example.com/repo/"),
 	}
 	r, err := NewRepository(settings)
 	assert.Nil(t, err)
@@ -168,7 +167,7 @@ func TestGetCompsURL(t *testing.T) {
 	xmlFile, err := os.Open("mocks/repomd.xml")
 	assert.Nil(t, err)
 	settings := YummySettings{
-		URL: pointy.String("http://foo.example.com/repo/"),
+		URL: Ptr("http://foo.example.com/repo/"),
 	}
 	r, err := NewRepository(settings)
 
@@ -186,7 +185,7 @@ func TestGetCompsURL(t *testing.T) {
 	assert.Nil(t, err)
 
 	settings = YummySettings{
-		URL: pointy.String("http://foo.example.com/repo/"),
+		URL: Ptr("http://foo.example.com/repo/"),
 	}
 	r, err = NewRepository(settings)
 	assert.Nil(t, err)
