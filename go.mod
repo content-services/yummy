@@ -1,6 +1,6 @@
 module github.com/content-services/yummy
 
-go 1.22
+go 1.23
 
 require (
 	github.com/ProtonMail/go-crypto v1.0.0
