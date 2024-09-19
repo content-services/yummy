@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"encoding/xml"
-	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -345,7 +344,7 @@ func TestParseCompressedXMLData(t *testing.T) {
 			t.Errorf("Error - Expected to return 2 packages but received: %v", len(result))
 		}
 		if result[0].Checksum.Type != "sha1" {
-			t.Errorf(fmt.Sprintf("Checksum of %s received, should be sha1", result[0].Checksum.Type))
+			t.Errorf("Checksum of %s received, should be sha1", result[0].Checksum.Type)
 		}
 		if result[0].Summary == "" {
 			t.Errorf("Did not properly parse summary")
