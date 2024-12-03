@@ -35,4 +35,9 @@
 <checksum type="sha256">1a3f4adf9a598d5badaaef70e67a0f02198c68ca118f5543a91c3fd8ca95c6aa</checksum>
 <timestamp>1299190192</timestamp>
 </data>
+<data type="modules">
+    <location href="repodata/module.yaml.zst"/>
+    <checksum type="sha256">4307ecf77fe1abaf567a15336c5141d813ae223602d2bc4cd606b94fd9269fd4</checksum>
+    <timestamp>1299190192</timestamp>
+</data>
 </repomd>
