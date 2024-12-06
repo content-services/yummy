@@ -2,7 +2,6 @@ package yum
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/xml"
@@ -97,6 +96,7 @@ type YumRepository interface {
 	Packages(ctx context.Context) (packages []Package, statusCode int, err error)
 	Repomd(ctx context.Context) (repomd *Repomd, statusCode int, err error)
 	Signature(ctx context.Context) (repomdSignature *string, statusCode int, err error)
+	ModuleMDs(ctx context.Context) ([]ModuleMD, int, error)
 	Comps(ctx context.Context) (comps *Comps, statusCode int, err error)
 	PackageGroups(ctx context.Context) (packageGroups []PackageGroup, statusCode int, err error)
 	Environments(ctx context.Context) (environments []Environment, statusCode int, err error)
@@ -105,10 +105,11 @@ type YumRepository interface {
 
 type Repository struct {
 	settings        YummySettings
-	packages        []Package // Packages repository contains
-	repomdSignature *string   // Signature of the repository
-	repomd          *Repomd   // Repomd of the repository
-	comps           *Comps    // Comps of the repository
+	packages        []Package  // Packages repository contains
+	repomdSignature *string    // Signature of the repository
+	repomd          *Repomd    // Repomd of the repository
+	comps           *Comps     // Comps of the repository
+	moduleMDs       []ModuleMD // Module md documents of the repository, used to compute moduleStreams
 }
 
 func NewRepository(settings YummySettings) (Repository, error) {
@@ -374,6 +375,29 @@ func (r *Repository) getCompsURL() (*string, error) {
 	return Ptr(url.String()), nil
 }
 
+func (r *Repository) getModulesURL() (*string, error) {
+	var compsLocation string
+
+	for _, data := range r.repomd.Data {
+		if data.Type == "modules_gz" {
+			compsLocation = data.Location.Href
+		} else if data.Type == "modules" {
+			compsLocation = data.Location.Href
+		}
+	}
+
+	if compsLocation == "" {
+		return nil, nil
+	}
+
+	URL, err := url.Parse(*r.settings.URL)
+	if err != nil {
+		return nil, err
+	}
+	URL.Path = path.Join(URL.Path, compsLocation)
+	return Ptr(URL.String()), nil
+}
+
 func (r *Repository) getSignatureURL() (string, error) {
 	url, err := r.getRepomdURL()
 	if err == nil {
@@ -442,31 +466,10 @@ func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
 	packageGroups := []PackageGroup{}
 	environments := []Environment{}
 
-	byteValue, err := io.ReadAll(body)
-	if err != nil {
-		return comps, fmt.Errorf("io.reader read failure: %w", err)
-	}
-
 	// determine the file type from the header
-	bufferedReader := bufio.NewReader(bytes.NewReader(byteValue))
-	header, err := bufferedReader.Peek(20)
+	reader, err := ExtractIfCompressed(body)
 	if err != nil {
 		return comps, err
-	}
-	fileType, err := filetype.Match(header)
-	if err != nil {
-		return comps, err
-	}
-
-	// handle compressed comps
-	if fileType == matchers.TypeGz || fileType == matchers.TypeZstd || fileType == matchers.TypeXz {
-		reader, err = ParseCompressedData(bytes.NewReader(byteValue))
-		if err != nil {
-			return comps, err
-		}
-		// handle uncompressed comps
-	} else {
-		reader = bytes.NewReader(byteValue)
 	}
 
 	decoder := xml.NewDecoder(reader)
