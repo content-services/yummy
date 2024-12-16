@@ -26,6 +26,9 @@ var compsXML []byte
 //go:embed "mocks/repomd.xml.asc"
 var signatureXML []byte
 
+//go:embed "mocks/module.yaml.zst"
+var moduleYamlZst []byte
+
 func TestConfigure(t *testing.T) {
 	firstURL := "http://first.example.com"
 	firstClient := &http.Client{}
@@ -132,6 +135,10 @@ func TestFetchRepomd(t *testing.T) {
 			{
 				Type:     "updateinfo",
 				Location: Location{Href: "repodata/updateinfo.xml.gz"},
+			},
+			{
+				Type:     "modules",
+				Location: Location{Href: "repodata/module.yaml.zst"},
 			},
 		},
 		Revision:     "1308257578",
@@ -361,6 +368,7 @@ func server() *httptest.Server {
 	mux.HandleFunc("/repodata/primary.xml.gz", servePrimaryXML)
 	mux.HandleFunc("/repodata/comps.xml", serveCompsXML)
 	mux.HandleFunc("/repodata/repomd.xml.asc", serveSignatureXML)
+	mux.HandleFunc("/repodata/module.yaml.zst", serveModulesMd)
 	mux.HandleFunc("/gpgkey.pub", serveGPGKey)
 	return httptest.NewServer(mux)
 }
@@ -386,5 +394,12 @@ func serveCompsXML(w http.ResponseWriter, r *http.Request) {
 func serveSignatureXML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/xml")
 	body := signatureXML
+	_, _ = w.Write(body)
+}
+
+func serveModulesMd(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "text/xml")
+
+	body := moduleYamlZst
 	_, _ = w.Write(body)
 }
