@@ -1,6 +1,6 @@
 module github.com/content-services/yummy
 
-go 1.22
+go 1.22.0
 
 require (
 	github.com/ProtonMail/go-crypto v1.0.0
@@ -13,7 +13,7 @@ require (
 )
 
 require (
-	github.com/cloudflare/circl v1.3.9 // indirect
+	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
