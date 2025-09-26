@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/goccy/go-yaml"
 	"github.com/mitchellh/mapstructure"
-	"gopkg.in/yaml.v3"
 )
 
 // Better userfacing struct
