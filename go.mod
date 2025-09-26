@@ -2,8 +2,6 @@ module github.com/content-services/yummy
 
 go 1.24.0
 
-toolchain go1.24.7
-
 require (
 	github.com/ProtonMail/go-crypto v1.3.0
 	github.com/h2non/filetype v1.1.3
