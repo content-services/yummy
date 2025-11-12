@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/mitchellh/mapstructure"
+	"github.com/goccy/go-yaml/ast"
 )
 
 // Better userfacing struct
@@ -18,28 +19,48 @@ type ModuleStream struct {
 }
 
 type Stream struct {
-	Name        string                 `mapstructure:"name"`
-	Stream      string                 `mapstructure:"stream"`
-	Version     string                 `mapstructure:"version"`
-	Context     string                 `mapstructure:"context"`
-	Arch        string                 `mapstructure:"arch"`
-	Summary     string                 `mapstructure:"summary"`
-	Description string                 `mapstructure:"description"`
-	Artifacts   Artifacts              `mapstructure:"artifacts"`
-	Profiles    map[string]RpmProfiles `mapstructure:"profiles"`
+	Name        string                 `yaml:"name"`
+	Stream      StreamVersion          `yaml:"stream"`
+	Version     string                 `yaml:"version"`
+	Context     string                 `yaml:"context"`
+	Arch        string                 `yaml:"arch"`
+	Summary     string                 `yaml:"summary"`
+	Description string                 `yaml:"description"`
+	Artifacts   Artifacts              `yaml:"artifacts"`
+	Profiles    map[string]RpmProfiles `yaml:"profiles"`
+}
+
+type StreamVersion string
+
+// unmarshalStreamVersion ensures trailing zeros is preserved
+// in cases are the stream value is a float like 5.30
+func unmarshalStreamVersion(s *StreamVersion, data []byte) error {
+	str := strings.TrimSpace(string(data))
+
+	//Remove additional quotes when stream is represented as string
+	if len(str) >= 2 && str[0] == '"' && str[len(str)-1] == '"' {
+		str = str[1 : len(str)-1]
+	}
+
+	*s = StreamVersion(str)
+	return nil
+}
+
+func (s StreamVersion) String() string {
+	return string(s)
 }
 
 type RpmProfiles struct {
-	Rpms []string `mapstructure:"rpms"`
+	Rpms []string `yaml:"rpms"`
 }
 
 type Artifacts struct {
-	Rpms []string `mapstructure:"rpms"`
+	Rpms []string `yaml:"rpms"`
 }
 
 type ModuleMD struct {
-	Document string `mapstructure:"document"`
-	Version  int    `mapstructure:"version"`
+	Document string `yaml:"document"`
+	Version  int    `yaml:"version"`
 	Data     Stream `yaml:"data"`
 }
 
@@ -83,12 +104,10 @@ func (r *Repository) ModuleMDs(ctx context.Context) ([]ModuleMD, int, error) {
 	return moduleMDs, 0, err
 }
 
-// parses modulemd objects from a given io reader
-// modules yaml files include different types of documents which is hard to parse
-// this implements a two step process:
-//
-//	Parse each document into a map, with the value of interface, and then
-//	use mapstructure to parse the interface into a ModuleMD struct
+// parseModuleMDs moduleMDs contain multiple document types
+// this breaks parsing into two parts:
+// 1. use node to read the document type
+// 2. if the document type is modulemd, fully decode the value
 func parseModuleMDs(body io.ReadCloser) ([]ModuleMD, error) {
 	moduleMDs := make([]ModuleMD, 0)
 
@@ -97,32 +116,30 @@ func parseModuleMDs(body io.ReadCloser) ([]ModuleMD, error) {
 		return moduleMDs, fmt.Errorf("error extracting compressed streams: %w", err)
 	}
 
+	yaml.RegisterCustomUnmarshaler[StreamVersion](unmarshalStreamVersion)
+
 	decoder := yaml.NewDecoder(reader)
 	for {
-		var doc map[string]interface{}
-
-		// Decode the next document
-		err := decoder.Decode(&doc)
+		var node ast.Node
+		err := decoder.Decode(&node)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
 			return nil, fmt.Errorf("error decoding streams: %w", err)
 		}
-		// Only care about modulemds right now
-		if doc["document"] == "modulemd" {
+
+		var docType struct {
+			Document string `yaml:"document"`
+		}
+		if err := yaml.NodeToValue(node, &docType); err != nil {
+			return nil, fmt.Errorf("error decoding document type: %w", err)
+		}
+
+		if docType.Document == "modulemd" {
 			var module ModuleMD
-			config := &mapstructure.DecoderConfig{
-				WeaklyTypedInput: true,
-				Result:           &module,
-			}
-			mapDecode, err := mapstructure.NewDecoder(config)
-			if err != nil {
-				return moduleMDs, fmt.Errorf("error creating map decoder: %w", err)
-			}
-			err = mapDecode.Decode(doc)
-			if err != nil {
-				return nil, fmt.Errorf("error decoding map: %w", err)
+			if err := yaml.NodeToValue(node, &module); err != nil {
+				return nil, fmt.Errorf("error decoding modulemd: %w", err)
 			}
 			moduleMDs = append(moduleMDs, module)
 		}
