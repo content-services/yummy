@@ -158,7 +158,7 @@ func (r *Repository) Repomd(ctx context.Context) (*Repomd, int, error) {
 		return r.repomd, 0, nil
 	}
 	if repomdURL, err = r.getRepomdURL(); err != nil {
-		return nil, 0, fmt.Errorf("Error parsing Repomd URL: %w", err)
+		return nil, 0, fmt.Errorf("error parsing Repomd URL: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, repomdURL, nil)
@@ -172,10 +172,10 @@ func (r *Repository) Repomd(ctx context.Context) (*Repomd, int, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, fmt.Errorf("Cannot fetch %v: %v", repomdURL, resp.StatusCode)
+		return nil, resp.StatusCode, fmt.Errorf("cannot fetch %v: %v", repomdURL, resp.StatusCode)
 	}
 	if result, err = ParseRepomdXML(resp.Body); err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("Error parsing repomd.xml: %w", err)
+		return nil, resp.StatusCode, fmt.Errorf("error parsing repomd.xml: %w", err)
 	}
 
 	r.repomd = &result
@@ -249,7 +249,7 @@ func (r *Repository) Packages(ctx context.Context) ([]Package, int, error) {
 	}
 
 	if primaryURL, err = r.getPrimaryURL(ctx); err != nil {
-		return nil, 0, fmt.Errorf("Error getting primary URL: %w", err)
+		return nil, 0, fmt.Errorf("error getting primary URL: %w", err)
 	}
 
 	if resp, err = r.settings.Client.Get(primaryURL); err != nil {
@@ -258,7 +258,7 @@ func (r *Repository) Packages(ctx context.Context) ([]Package, int, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, fmt.Errorf("Cannot fetch %v: %d", primaryURL, resp.StatusCode)
+		return nil, resp.StatusCode, fmt.Errorf("cannot fetch %v: %d", primaryURL, resp.StatusCode)
 	}
 
 	if packages, err = ParseCompressedXMLData(io.NopCloser(resp.Body), *r.settings.MaxXmlSize); err != nil {
@@ -356,9 +356,10 @@ func (r *Repository) getCompsURL() (*string, error) {
 	var compsLocation string
 
 	for _, data := range r.repomd.Data {
-		if data.Type == "group_gz" {
+		switch data.Type {
+		case "group_gz":
 			compsLocation = data.Location.Href
-		} else if data.Type == "group" {
+		case "group":
 			compsLocation = data.Location.Href
 		}
 	}
@@ -379,9 +380,10 @@ func (r *Repository) getModulesURL() (*string, error) {
 	var compsLocation string
 
 	for _, data := range r.repomd.Data {
-		if data.Type == "modules_gz" {
+		switch data.Type {
+		case "modules_gz":
 			compsLocation = data.Location.Href
-		} else if data.Type == "modules" {
+		case "modules":
 			compsLocation = data.Location.Href
 		}
 	}
@@ -487,13 +489,14 @@ func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
 
 		switch elType := t.(type) {
 		case xml.StartElement:
-			if elType.Name.Local == "group" {
+			switch elType.Name.Local {
+			case "group":
 				var packageGroup PackageGroup
 				if decodeElementError := decoder.DecodeElement(&packageGroup, &elType); decodeElementError != nil {
 					return comps, decodeElementError
 				}
 				packageGroups = append(packageGroups, packageGroup)
-			} else if elType.Name.Local == "environment" {
+			case "environment":
 				var environment Environment
 				if decodeElementError := decoder.DecodeElement(&environment, &elType); decodeElementError != nil {
 					return comps, decodeElementError
