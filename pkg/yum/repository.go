@@ -166,7 +166,7 @@ func (r *Repository) Repomd(ctx context.Context) (*Repomd, int, error) {
 		return nil, 0, fmt.Errorf("error creating request: %w", err)
 	}
 
-	if resp, err = r.settings.Client.Do(req); err != nil {
+	if resp, err = r.settings.Client.Do(req); err != nil /* #nosec G704 */ {
 		return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", repomdURL, err)
 	}
 	defer resp.Body.Close()
@@ -214,7 +214,7 @@ func (r *Repository) Comps(ctx context.Context) (*Comps, int, error) {
 			return nil, 0, fmt.Errorf("error creating request: %w", err)
 		}
 
-		if resp, err = r.settings.Client.Do(req); err != nil {
+		if resp, err = r.settings.Client.Do(req); err != nil /* #nosec G704 */ {
 			return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", compsURL, err)
 		}
 

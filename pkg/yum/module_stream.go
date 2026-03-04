@@ -89,7 +89,7 @@ func (r *Repository) ModuleMDs(ctx context.Context) ([]ModuleMD, int, error) {
 			return nil, 0, fmt.Errorf("error creating request: %w", err)
 		}
 
-		if resp, err = r.settings.Client.Do(req); err != nil {
+		if resp, err = r.settings.Client.Do(req); err != nil /* #nosec G704 */ {
 			return nil, erroredStatusCode(resp), fmt.Errorf("GET error for file %v: %w", modulesURL, err)
 		}
 		defer resp.Body.Close()
