@@ -94,8 +94,8 @@ func (r *Repository) ModuleMDs(ctx context.Context) ([]ModuleMD, int, error) {
 		}
 		defer resp.Body.Close()
 
-		if moduleMDs, err = parseModuleMDs(resp.Body, *r.settings.MaxXmlSize); err != nil {
-			return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
+		if moduleMDs, err = parseModuleMDs(resp.Body, 10); err != nil {
+			return nil, resp.StatusCode, fmt.Errorf("error parsing modulemds: %w", err)
 		}
 
 		return moduleMDs, resp.StatusCode, nil
@@ -118,11 +118,16 @@ func parseModuleMDs(body io.ReadCloser, maxSize int64) ([]ModuleMD, error) {
 
 	yaml.RegisterCustomUnmarshaler[StreamVersion](unmarshalStreamVersion)
 
-	limitedReader := io.LimitReader(reader, maxSize)
+	limitedReader := &io.LimitedReader{R: reader, N: maxSize}
 	decoder := yaml.NewDecoder(limitedReader)
 	for {
 		var node ast.Node
 		err := decoder.Decode(&node)
+
+		if limitedReader.N <= 0 {
+			return nil, fmt.Errorf("decompression limit of %d bytes met or exceeded", maxSize)
+		}
+
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
