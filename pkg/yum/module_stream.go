@@ -94,7 +94,7 @@ func (r *Repository) ModuleMDs(ctx context.Context) ([]ModuleMD, int, error) {
 		}
 		defer resp.Body.Close()
 
-		if moduleMDs, err = parseModuleMDs(resp.Body); err != nil {
+		if moduleMDs, err = parseModuleMDs(resp.Body, *r.settings.MaxXmlSize); err != nil {
 			return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
 		}
 
@@ -108,7 +108,7 @@ func (r *Repository) ModuleMDs(ctx context.Context) ([]ModuleMD, int, error) {
 // this breaks parsing into two parts:
 // 1. use node to read the document type
 // 2. if the document type is modulemd, fully decode the value
-func parseModuleMDs(body io.ReadCloser) ([]ModuleMD, error) {
+func parseModuleMDs(body io.ReadCloser, maxSize int64) ([]ModuleMD, error) {
 	moduleMDs := make([]ModuleMD, 0)
 
 	reader, err := ExtractIfCompressed(body)
@@ -118,7 +118,8 @@ func parseModuleMDs(body io.ReadCloser) ([]ModuleMD, error) {
 
 	yaml.RegisterCustomUnmarshaler[StreamVersion](unmarshalStreamVersion)
 
-	decoder := yaml.NewDecoder(reader)
+	limitedReader := io.LimitReader(reader, maxSize)
+	decoder := yaml.NewDecoder(limitedReader)
 	for {
 		var node ast.Node
 		err := decoder.Decode(&node)

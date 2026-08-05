@@ -303,10 +303,24 @@ func TestParseCompsXML(t *testing.T) {
 		xmlFile, err := os.Open(path)
 		assert.NoError(t, err)
 		defer xmlFile.Close()
-		comps, err := ParseCompsXML(xmlFile, &path)
+		comps, err := ParseCompsXML(xmlFile, &path, DefaultMaxXmlSize)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, comps)
 	}
+}
+
+// A maxSize that's smaller than the decompressed comps.xml must bound how much is read,
+// rather than fully decompressing/parsing the payload (decompression-bomb protection).
+func TestParseCompsXMLMaxLimit(t *testing.T) {
+	path := "mocks/comps.xml.gz"
+	xmlFile, err := os.Open(path)
+	assert.NoError(t, err)
+	defer xmlFile.Close()
+
+	comps, err := ParseCompsXML(xmlFile, &path, 10)
+	assert.Error(t, err)
+	assert.Empty(t, comps.PackageGroups)
+	assert.Empty(t, comps.Environments)
 }
 
 // if the xml is half complete, you get a parse error

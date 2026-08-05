@@ -220,7 +220,7 @@ func (r *Repository) Comps(ctx context.Context) (*Comps, int, error) {
 
 		defer resp.Body.Close()
 
-		if comps, err = ParseCompsXML(resp.Body, compsURL); err != nil {
+		if comps, err = ParseCompsXML(resp.Body, compsURL, *r.settings.MaxXmlSize); err != nil {
 			return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
 		}
 
@@ -462,7 +462,7 @@ func ParseRepomdXML(body io.ReadCloser) (Repomd, error) {
 }
 
 // ParseCompsXML creates PackageGroup array and Environment array from comps.xml body response
-func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
+func ParseCompsXML(body io.ReadCloser, url *string, maxSize int64) (Comps, error) {
 	var reader io.Reader
 	var comps Comps
 	packageGroups := []PackageGroup{}
@@ -474,7 +474,8 @@ func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
 		return comps, err
 	}
 
-	decoder := xml.NewDecoder(reader)
+	limitedReader := io.LimitReader(reader, maxSize)
+	decoder := xml.NewDecoder(limitedReader)
 
 	for {
 		t, decodeError := decoder.Token()
