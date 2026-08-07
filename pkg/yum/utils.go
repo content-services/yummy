@@ -2,6 +2,7 @@ package yum
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 
 	"github.com/h2non/filetype"
@@ -35,4 +36,13 @@ func ExtractIfCompressed(reader io.ReadCloser) (extractedReader io.Reader, err e
 		// handle uncompressed comps
 		return bufferedReader, nil
 	}
+}
+
+// CheckLimit inspects an io.Reader (typically returned from io.LimitReader)
+// to see if the byte limit has been exceeded.
+func CheckLimit(r io.Reader, maxSize int64) error {
+	if lr, ok := r.(*io.LimitedReader); ok && lr.N == 0 {
+		return fmt.Errorf("decompression limit of %d bytes exceeded", maxSize)
+	}
+	return nil
 }
