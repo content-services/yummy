@@ -133,8 +133,7 @@ func parseModuleMDs(body io.ReadCloser, maxSize int64) ([]ModuleMD, error) {
 
 			if errors.Is(err, io.EOF) {
 				break
-			} 
-			
+			}
 			return nil, fmt.Errorf("error decoding streams: %w", err)
 		}
 
@@ -143,9 +142,9 @@ func parseModuleMDs(body io.ReadCloser, maxSize int64) ([]ModuleMD, error) {
 		}
 		if err := yaml.NodeToValue(node, &docType); err != nil {
 			// Check limit if NodeToValue fails due to an incomplete/truncated AST
-            if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
-                return nil, limitErr
-            }
+			if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+				return nil, limitErr
+			}
 			return nil, fmt.Errorf("error decoding document type: %w", err)
 		}
 
