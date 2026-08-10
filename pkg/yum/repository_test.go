@@ -319,6 +319,7 @@ func TestParseCompsXMLMaxLimit(t *testing.T) {
 
 	comps, err := ParseCompsXML(xmlFile, &path, 10)
 	assert.Error(t, err)
+	assert.ErrorContains(t, err, "decompression limit of 10 bytes exceeded")
 	assert.Empty(t, comps.PackageGroups)
 	assert.Empty(t, comps.Environments)
 }
