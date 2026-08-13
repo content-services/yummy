@@ -311,7 +311,7 @@ func TestParseCompsXML(t *testing.T) {
 
 // A maxSize that's smaller than the decompressed comps.xml must bound how much is read,
 // rather than fully decompressing/parsing the payload (decompression-bomb protection).
-func TestParseCompsXMLMaxLimit(t *testing.T) {
+func TestParseCompsXMLMaxLimitError(t *testing.T) {
 	path := "mocks/comps.xml.gz"
 	xmlFile, err := os.Open(path)
 	assert.NoError(t, err)
@@ -325,21 +325,22 @@ func TestParseCompsXMLMaxLimit(t *testing.T) {
 }
 
 // if the xml is half complete, you get a parse error
-func TestParseCompressedXMLDataWithError(t *testing.T) {
+func TestParseCompressedXMLDataMaxLimitError(t *testing.T) {
 	xmlFile, err := os.Open("mocks/primary.xml.gz")
 	assert.NoError(t, err)
 	defer xmlFile.Close()
 	result, err := ParseCompressedXMLData(xmlFile, 200)
 	assert.Error(t, err)
+	assert.ErrorContains(t, err, "decompression limit of 200 bytes exceeded")
 	assert.Empty(t, result)
 }
 
 // If no elements are parsed, no error is thrown, but you get empty results
-func TestParseCompressedXMLDataMaxLimit(t *testing.T) {
+func TestParseCompressedXMLDataNoXMLElements(t *testing.T) {
 	xmlFile, err := os.Open("mocks/aaaa.xml.gz")
 	assert.NoError(t, err)
 	defer xmlFile.Close()
-	result, err := ParseCompressedXMLData(xmlFile, 10)
+	result, err := ParseCompressedXMLData(xmlFile, DefaultMaxXmlSize)
 	assert.NoError(t, err)
 	assert.Empty(t, result)
 }

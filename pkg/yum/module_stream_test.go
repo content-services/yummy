@@ -22,7 +22,7 @@ func TestParseModuleMDs(t *testing.T) {
 
 // A maxSize that's smaller than the decompressed modules.yaml must bound how much is read,
 // rather than fully decompressing/parsing the payload (decompression-bomb protection).
-func TestParseModuleMDsMaxLimit(t *testing.T) {
+func TestParseModuleMDsMaxLimitError(t *testing.T) {
 	f, err := os.Open("mocks/module.yaml.zst")
 	assert.NoError(t, err)
 	defer f.Close()

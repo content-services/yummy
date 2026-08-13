@@ -580,20 +580,22 @@ func ParseCompressedXMLData(body io.Reader, maxSize int64) ([]Package, error) {
 		return []Package{}, fmt.Errorf("error unzipping response body: %w", err)
 	}
 
-	limitedReader := io.LimitReader(reader, maxSize)
+	// Wrap with maxSize + 1 so limit error only triggers when limit is exceeded
+	limitedReader := io.LimitReader(reader, maxSize+1)
 	decoder := xml.NewDecoder(limitedReader)
 
 	for {
 		// Read tokens from the XML document in a stream.
 		t, decodeError := decoder.Token()
 
-		// If we are at the end of the file, we are done
-		if decodeError == io.EOF {
-			break
-		} else if decodeError != nil {
+		if decodeError != nil {
+			if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+				return []Package{}, limitErr
+			}
+			if errors.Is(decodeError, io.EOF) {
+				break
+			}
 			return []Package{}, fmt.Errorf("error decoding token: %w", decodeError)
-		} else if t == nil {
-			break
 		}
 
 		// Here, we inspect the token
@@ -604,6 +606,9 @@ func ParseCompressedXMLData(body io.Reader, maxSize int64) ([]Package, error) {
 			case "package":
 				var pkg Package
 				if decodeElementError := decoder.DecodeElement(&pkg, &elType); decodeElementError != nil {
+					if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+						return []Package{}, limitErr
+					}
 					return result, decodeElementError
 				}
 				// Ensure that the type is "rpm" before pushing our array
