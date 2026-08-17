@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -220,7 +221,7 @@ func (r *Repository) Comps(ctx context.Context) (*Comps, int, error) {
 
 		defer resp.Body.Close()
 
-		if comps, err = ParseCompsXML(resp.Body, compsURL); err != nil {
+		if comps, err = ParseCompsXML(resp.Body, compsURL, *r.settings.MaxXmlSize); err != nil {
 			return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
 		}
 
@@ -462,7 +463,7 @@ func ParseRepomdXML(body io.ReadCloser) (Repomd, error) {
 }
 
 // ParseCompsXML creates PackageGroup array and Environment array from comps.xml body response
-func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
+func ParseCompsXML(body io.ReadCloser, url *string, maxSize int64) (Comps, error) {
 	var reader io.Reader
 	var comps Comps
 	packageGroups := []PackageGroup{}
@@ -474,17 +475,21 @@ func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
 		return comps, err
 	}
 
-	decoder := xml.NewDecoder(reader)
+	// Wrap with maxSize + 1 so limit error only triggers when limit is exceeded
+	limitedReader := io.LimitReader(reader, maxSize+1)
+	decoder := xml.NewDecoder(limitedReader)
 
 	for {
 		t, decodeError := decoder.Token()
 
-		if decodeError == io.EOF {
-			break
-		} else if decodeError != nil {
+		if decodeError != nil {
+			if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+				return comps, limitErr
+			}
+			if errors.Is(decodeError, io.EOF) {
+				break
+			}
 			return comps, fmt.Errorf("error decoding token: %w", decodeError)
-		} else if t == nil {
-			break
 		}
 
 		switch elType := t.(type) {
@@ -493,12 +498,18 @@ func ParseCompsXML(body io.ReadCloser, url *string) (Comps, error) {
 			case "group":
 				var packageGroup PackageGroup
 				if decodeElementError := decoder.DecodeElement(&packageGroup, &elType); decodeElementError != nil {
+					if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+						return comps, limitErr
+					}
 					return comps, decodeElementError
 				}
 				packageGroups = append(packageGroups, packageGroup)
 			case "environment":
 				var environment Environment
 				if decodeElementError := decoder.DecodeElement(&environment, &elType); decodeElementError != nil {
+					if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+						return comps, limitErr
+					}
 					return comps, decodeElementError
 				}
 				environments = append(environments, environment)
@@ -569,20 +580,22 @@ func ParseCompressedXMLData(body io.Reader, maxSize int64) ([]Package, error) {
 		return []Package{}, fmt.Errorf("error unzipping response body: %w", err)
 	}
 
-	limitedReader := io.LimitReader(reader, maxSize)
+	// Wrap with maxSize + 1 so limit error only triggers when limit is exceeded
+	limitedReader := io.LimitReader(reader, maxSize+1)
 	decoder := xml.NewDecoder(limitedReader)
 
 	for {
 		// Read tokens from the XML document in a stream.
 		t, decodeError := decoder.Token()
 
-		// If we are at the end of the file, we are done
-		if decodeError == io.EOF {
-			break
-		} else if decodeError != nil {
+		if decodeError != nil {
+			if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+				return []Package{}, limitErr
+			}
+			if errors.Is(decodeError, io.EOF) {
+				break
+			}
 			return []Package{}, fmt.Errorf("error decoding token: %w", decodeError)
-		} else if t == nil {
-			break
 		}
 
 		// Here, we inspect the token
@@ -593,6 +606,9 @@ func ParseCompressedXMLData(body io.Reader, maxSize int64) ([]Package, error) {
 			case "package":
 				var pkg Package
 				if decodeElementError := decoder.DecodeElement(&pkg, &elType); decodeElementError != nil {
+					if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+						return []Package{}, limitErr
+					}
 					return result, decodeElementError
 				}
 				// Ensure that the type is "rpm" before pushing our array

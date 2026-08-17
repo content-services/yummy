@@ -13,18 +13,31 @@ func TestParseModuleMDs(t *testing.T) {
 	f, err := os.Open("mocks/module.yaml.zst")
 	assert.NoError(t, err)
 
-	parsed, err := parseModuleMDs(f)
+	parsed, err := parseModuleMDs(f, DefaultMaxXmlSize)
 	assert.NoError(t, err)
 	assert.Equal(t, 13, len(parsed))
 	assert.NotEmpty(t, parsed[0].Data.Name)
 	assert.NotEmpty(t, parsed[0].Data.Artifacts.Rpms)
 }
 
+// A maxSize that's smaller than the decompressed modules.yaml must bound how much is read,
+// rather than fully decompressing/parsing the payload (decompression-bomb protection).
+func TestParseModuleMDsMaxLimitError(t *testing.T) {
+	f, err := os.Open("mocks/module.yaml.zst")
+	assert.NoError(t, err)
+	defer f.Close()
+
+	parsed, err := parseModuleMDs(f, 10)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "decompression limit of 10 bytes exceeded")
+	assert.Empty(t, parsed)
+}
+
 func TestStreamVersionPrecision(t *testing.T) {
 	f, err := os.Open("mocks/module.yaml.zst")
 	assert.NoError(t, err)
 
-	parsed, err := parseModuleMDs(f)
+	parsed, err := parseModuleMDs(f, DefaultMaxXmlSize)
 	assert.NoError(t, err)
 
 	handlesFloatFound, handlesStringFound := false, false
@@ -48,7 +61,7 @@ func TestParseRhel8Modules(t *testing.T) {
 	defer f.Close()
 	require.NoError(t, err)
 
-	modules, err := parseModuleMDs(f)
+	modules, err := parseModuleMDs(f, DefaultMaxXmlSize)
 	require.NoError(t, err)
 
 	assert.Len(t, modules, 961)

@@ -94,8 +94,8 @@ func (r *Repository) ModuleMDs(ctx context.Context) ([]ModuleMD, int, error) {
 		}
 		defer resp.Body.Close()
 
-		if moduleMDs, err = parseModuleMDs(resp.Body); err != nil {
-			return nil, resp.StatusCode, fmt.Errorf("error parsing comps.xml: %w", err)
+		if moduleMDs, err = parseModuleMDs(resp.Body, *r.settings.MaxXmlSize); err != nil {
+			return nil, resp.StatusCode, fmt.Errorf("error parsing modulemds: %w", err)
 		}
 
 		return moduleMDs, resp.StatusCode, nil
@@ -108,7 +108,7 @@ func (r *Repository) ModuleMDs(ctx context.Context) ([]ModuleMD, int, error) {
 // this breaks parsing into two parts:
 // 1. use node to read the document type
 // 2. if the document type is modulemd, fully decode the value
-func parseModuleMDs(body io.ReadCloser) ([]ModuleMD, error) {
+func parseModuleMDs(body io.ReadCloser, maxSize int64) ([]ModuleMD, error) {
 	moduleMDs := make([]ModuleMD, 0)
 
 	reader, err := ExtractIfCompressed(body)
@@ -118,11 +118,19 @@ func parseModuleMDs(body io.ReadCloser) ([]ModuleMD, error) {
 
 	yaml.RegisterCustomUnmarshaler[StreamVersion](unmarshalStreamVersion)
 
-	decoder := yaml.NewDecoder(reader)
+	// Wrap with maxSize + 1 so limit error only triggers when limit is exceeded
+	limitedReader := io.LimitReader(reader, maxSize+1)
+	decoder := yaml.NewDecoder(limitedReader)
+
 	for {
 		var node ast.Node
 		err := decoder.Decode(&node)
+
 		if err != nil {
+			if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+				return nil, limitErr
+			}
+
 			if errors.Is(err, io.EOF) {
 				break
 			}
@@ -133,12 +141,19 @@ func parseModuleMDs(body io.ReadCloser) ([]ModuleMD, error) {
 			Document string `yaml:"document"`
 		}
 		if err := yaml.NodeToValue(node, &docType); err != nil {
+			// Check limit if NodeToValue fails due to an incomplete/truncated AST
+			if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+				return nil, limitErr
+			}
 			return nil, fmt.Errorf("error decoding document type: %w", err)
 		}
 
 		if docType.Document == "modulemd" {
 			var module ModuleMD
 			if err := yaml.NodeToValue(node, &module); err != nil {
+				if limitErr := CheckLimit(limitedReader, maxSize); limitErr != nil {
+					return nil, limitErr
+				}
 				return nil, fmt.Errorf("error decoding modulemd: %w", err)
 			}
 			moduleMDs = append(moduleMDs, module)
