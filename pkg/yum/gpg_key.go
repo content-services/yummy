@@ -25,11 +25,11 @@ func FetchGPGKey(ctx context.Context, url string, client *http.Client) (*string,
 	if err != nil {
 		return nil, 0, err
 	}
-	if err == nil && code < 200 || code > 299 {
+	if code < 200 || code > 299 {
 		return nil, code, fmt.Errorf("received http %d", code)
 	}
-	if _, openpgpErr := openpgp.ReadArmoredKeyRing(strings.NewReader(*gpgKeyString)); err != nil {
-		return nil, code, openpgpErr //Bad key
+	if _, err := openpgp.ReadArmoredKeyRing(strings.NewReader(*gpgKeyString)); err != nil {
+		return nil, code, fmt.Errorf("invalid gpg key: %w", err)
 	}
 	return gpgKeyString, code, nil
 }
